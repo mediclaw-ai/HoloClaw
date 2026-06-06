@@ -1,5 +1,6 @@
 package com.meta.wearable.dat.externalsampleapps.cameraaccess.gemini
 
+import android.content.Context
 import android.graphics.Bitmap
 import android.util.Log
 import androidx.lifecycle.ViewModel
@@ -48,7 +49,7 @@ class GeminiSessionViewModel : ViewModel() {
 
     var streamingMode: StreamingMode = StreamingMode.GLASSES
 
-    fun startSession() {
+    fun startSession(context: Context) {
         if (_uiState.value.isGeminiActive) return
 
         if (!GeminiConfig.isConfigured) {
@@ -62,8 +63,9 @@ class GeminiSessionViewModel : ViewModel() {
 
         // Wire audio callbacks
         audioManager.onAudioCaptured = lambda@{ data ->
-            // Phone mode: mute mic while model speaks to prevent echo
-            if (streamingMode == StreamingMode.PHONE && geminiService.isModelSpeaking.value) return@lambda
+            val speakerOnPhone =
+                streamingMode == StreamingMode.PHONE || SettingsManager.speakerOutputEnabled
+            if (speakerOnPhone && geminiService.isModelSpeaking.value) return@lambda
             geminiService.sendAudio(data)
         }
 
@@ -153,6 +155,7 @@ class GeminiSessionViewModel : ViewModel() {
 
                 // Start mic capture
                 try {
+                    audioManager.setupAudioSession(context, streamingMode == StreamingMode.PHONE)
                     audioManager.startCapture()
                 } catch (e: Exception) {
                     _uiState.value = _uiState.value.copy(

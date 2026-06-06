@@ -12,6 +12,7 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -24,8 +25,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -34,12 +37,13 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.meta.wearable.dat.camera.types.StreamSessionState
+import com.meta.wearable.dat.camera.types.StreamState
 import com.meta.wearable.dat.externalsampleapps.cameraaccess.R
 import com.meta.wearable.dat.externalsampleapps.cameraaccess.gemini.GeminiSessionViewModel
 import com.meta.wearable.dat.externalsampleapps.cameraaccess.stream.StreamViewModel
 import com.meta.wearable.dat.externalsampleapps.cameraaccess.stream.StreamingMode
 import com.meta.wearable.dat.externalsampleapps.cameraaccess.wearables.WearablesViewModel
+import com.meta.wearable.dat.externalsampleapps.cameraaccess.webrtc.WebRTCConnectionState
 import com.meta.wearable.dat.externalsampleapps.cameraaccess.webrtc.WebRTCSessionViewModel
 
 @Composable
@@ -64,17 +68,14 @@ fun StreamScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
     val context = LocalContext.current
 
-    // Wire Gemini VM to Stream VM for frame forwarding
     LaunchedEffect(geminiViewModel) {
         streamViewModel.geminiViewModel = geminiViewModel
     }
 
-    // Wire WebRTC VM to Stream VM for frame forwarding
     LaunchedEffect(webrtcViewModel) {
         streamViewModel.webrtcViewModel = webrtcViewModel
     }
 
-    // Start stream or phone camera
     LaunchedEffect(isPhoneMode) {
         if (isPhoneMode) {
             geminiViewModel.streamingMode = StreamingMode.PHONE
@@ -85,19 +86,13 @@ fun StreamScreen(
         }
     }
 
-    // Clean up on exit
     DisposableEffect(Unit) {
         onDispose {
-            if (geminiUiState.isGeminiActive) {
-                geminiViewModel.stopSession()
-            }
-            if (webrtcUiState.isActive) {
-                webrtcViewModel.stopSession()
-            }
+            if (geminiUiState.isGeminiActive) geminiViewModel.stopSession()
+            if (webrtcUiState.isActive) webrtcViewModel.stopSession()
         }
     }
 
-    // Show errors as toasts
     LaunchedEffect(geminiUiState.errorMessage) {
         geminiUiState.errorMessage?.let { msg ->
             Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
@@ -111,40 +106,46 @@ fun StreamScreen(
         }
     }
 
-    Box(modifier = modifier.fillMaxSize()) {
-        // Video feed
-        streamUiState.videoFrame?.let { videoFrame ->
-            Image(
-                bitmap = videoFrame.asImageBitmap(),
-                contentDescription = stringResource(R.string.live_stream),
+    val showPiP =
+        webrtcUiState.isActive && webrtcUiState.connectionState is WebRTCConnectionState.Connected
+
+    Box(modifier = modifier.fillMaxSize().background(Color.Black)) {
+        if (showPiP) {
+            PiPVideoView(
+                localFrame = streamUiState.videoFrame,
+                remoteVideoTrack = webrtcUiState.remoteVideoTrack,
+                hasRemoteVideo = webrtcUiState.hasRemoteVideo,
+                eglContext = webrtcViewModel.eglContext,
                 modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop,
             )
+        } else if (streamUiState.videoFrame != null) {
+            key(streamUiState.videoFrameCount) {
+                Image(
+                    bitmap = streamUiState.videoFrame!!.asImageBitmap(),
+                    contentDescription = stringResource(R.string.live_stream),
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                )
+            }
         }
 
-        if (streamUiState.streamSessionState == StreamSessionState.STARTING) {
-            CircularProgressIndicator(
-                modifier = Modifier.align(Alignment.Center),
-            )
+        if (streamUiState.streamState == StreamState.STARTING) {
+            CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
         }
 
-        // Overlays + controls
         Box(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
-            // Top overlays (below status bar)
-            Column(modifier = Modifier.align(Alignment.TopStart).statusBarsPadding().padding(top = 8.dp)) {
-                // Gemini overlay
+            Column(
+                modifier = Modifier.align(Alignment.TopStart).statusBarsPadding().padding(top = 8.dp),
+            ) {
                 if (geminiUiState.isGeminiActive) {
                     GeminiOverlay(uiState = geminiUiState)
                 }
-
-                // WebRTC overlay
                 if (webrtcUiState.isActive) {
                     Spacer(modifier = Modifier.height(4.dp))
                     WebRTCOverlay(uiState = webrtcUiState)
                 }
             }
 
-            // Controls at bottom
             ControlsRow(
                 onStopStream = {
                     if (geminiUiState.isGeminiActive) geminiViewModel.stopSession()
@@ -157,7 +158,7 @@ fun StreamScreen(
                     if (geminiUiState.isGeminiActive) {
                         geminiViewModel.stopSession()
                     } else {
-                        geminiViewModel.startSession()
+                        geminiViewModel.startSession(context)
                     }
                 },
                 isAIActive = geminiUiState.isGeminiActive,
@@ -169,12 +170,14 @@ fun StreamScreen(
                     }
                 },
                 isLiveActive = webrtcUiState.isActive,
+                showCaptureButton = streamUiState.streamingMode == StreamingMode.GLASSES,
+                aiEnabled = !webrtcUiState.isActive,
+                liveEnabled = !geminiUiState.isGeminiActive,
                 modifier = Modifier.align(Alignment.BottomCenter),
             )
         }
     }
 
-    // Share photo dialog
     streamUiState.capturedPhoto?.let { photo ->
         if (streamUiState.isShareDialogVisible) {
             SharePhotoDialog(

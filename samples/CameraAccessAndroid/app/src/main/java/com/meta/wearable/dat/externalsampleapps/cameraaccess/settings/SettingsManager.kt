@@ -52,6 +52,10 @@ object SettingsManager {
         get() = prefs.getBoolean("proactiveNotificationsEnabled", true)
         set(value) = prefs.edit().putBoolean("proactiveNotificationsEnabled", value).apply()
 
+    var speakerOutputEnabled: Boolean
+        get() = prefs.getBoolean("speakerOutputEnabled", false)
+        set(value) = prefs.edit().putBoolean("speakerOutputEnabled", value).apply()
+
     fun resetAll() {
         prefs.edit().clear().apply()
     }

@@ -50,6 +50,8 @@ class WebRTCSessionViewModel(application: Application) : AndroidViewModel(applic
     private var signalingClient: SignalingClient? = null
     private var savedRoomCode: String? = null
 
+    val eglContext get() = webRTCClient?.eglBase?.eglBaseContext
+
     private val lifecycleObserver = object : DefaultLifecycleObserver {
         override fun onStart(owner: LifecycleOwner) {
             // App came to foreground

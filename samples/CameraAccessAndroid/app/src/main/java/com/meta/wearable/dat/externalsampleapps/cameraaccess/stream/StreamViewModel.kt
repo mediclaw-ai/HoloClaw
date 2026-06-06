@@ -8,14 +8,12 @@
 
 package com.meta.wearable.dat.externalsampleapps.cameraaccess.stream
 
+import android.annotation.SuppressLint
 import android.app.Application
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.graphics.ImageFormat
 import android.graphics.Matrix
-import android.graphics.Rect
-import android.graphics.YuvImage
 import android.util.Log
 import androidx.core.content.FileProvider
 import androidx.exifinterface.media.ExifInterface
@@ -24,24 +22,28 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.meta.wearable.dat.camera.StreamSession
-import com.meta.wearable.dat.camera.startStreamSession
+import com.meta.wearable.dat.camera.Stream
+import com.meta.wearable.dat.camera.addStream
 import com.meta.wearable.dat.camera.types.PhotoData
 import com.meta.wearable.dat.camera.types.StreamConfiguration
-import com.meta.wearable.dat.camera.types.StreamSessionState
+import com.meta.wearable.dat.camera.types.StreamError
+import com.meta.wearable.dat.camera.types.StreamState
 import com.meta.wearable.dat.camera.types.VideoFrame
-import com.meta.wearable.dat.camera.types.VideoQuality
 import com.meta.wearable.dat.core.Wearables
 import com.meta.wearable.dat.core.selectors.DeviceSelector
+import com.meta.wearable.dat.core.session.DeviceSession
+import com.meta.wearable.dat.core.session.DeviceSessionState
+import com.meta.wearable.dat.core.types.DeviceSessionError
+import com.meta.wearable.dat.externalsampleapps.cameraaccess.R
 import com.meta.wearable.dat.externalsampleapps.cameraaccess.gemini.GeminiSessionViewModel
 import com.meta.wearable.dat.externalsampleapps.cameraaccess.phone.PhoneCameraManager
 import com.meta.wearable.dat.externalsampleapps.cameraaccess.wearables.WearablesViewModel
 import com.meta.wearable.dat.externalsampleapps.cameraaccess.webrtc.WebRTCSessionViewModel
 import java.io.ByteArrayInputStream
-import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -49,6 +51,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+@SuppressLint("AutoCloseableUse")
 class StreamViewModel(
     application: Application,
     private val wearablesViewModel: WearablesViewModel,
@@ -57,126 +60,257 @@ class StreamViewModel(
   companion object {
     private const val TAG = "StreamViewModel"
     private val INITIAL_STATE = StreamUiState()
+    private val SESSION_TERMINAL_STATES = setOf(StreamState.CLOSED)
   }
 
   private val deviceSelector: DeviceSelector = wearablesViewModel.deviceSelector
-  private var streamSession: StreamSession? = null
+  private var session: DeviceSession? = null
 
   private val _uiState = MutableStateFlow(INITIAL_STATE)
   val uiState: StateFlow<StreamUiState> = _uiState.asStateFlow()
 
   private var videoJob: Job? = null
   private var stateJob: Job? = null
+  private var errorJob: Job? = null
+  @SuppressLint("MissingGuardedByAnnotation") private var sessionErrorJob: Job? = null
+  private var sessionStateJob: Job? = null
+  private var stream: Stream? = null
+  private var previousDeviceSessionState: DeviceSessionState? = null
 
-  // VisionClaw additions
-  var geminiViewModel: GeminiSessionViewModel? = null
-  var webrtcViewModel: WebRTCSessionViewModel? = null
+  private var presentationQueue: PresentationQueue? = null
   private var phoneCameraManager: PhoneCameraManager? = null
 
-  fun startStream() {
-    videoJob?.cancel()
-    stateJob?.cancel()
+  var geminiViewModel: GeminiSessionViewModel? = null
+  var webrtcViewModel: WebRTCSessionViewModel? = null
 
-    // Start foreground service to keep streaming alive in background / screen locked
+  fun startStream() {
     StreamingService.start(getApplication())
 
-    val streamSession =
-        Wearables.startStreamSession(
-                getApplication(),
-                deviceSelector,
-                StreamConfiguration(videoQuality = VideoQuality.MEDIUM, 24),
-            )
-            .also { streamSession = it }
-    _uiState.update { it.copy(streamingMode = StreamingMode.GLASSES) }
-    videoJob = viewModelScope.launch { streamSession.videoStream.collect { handleVideoFrame(it) } }
-    stateJob =
-        viewModelScope.launch {
-          streamSession.state.collect { currentState ->
-            val prevState = _uiState.value.streamSessionState
-            _uiState.update { it.copy(streamSessionState = currentState) }
+    videoJob?.cancel()
+    stateJob?.cancel()
+    errorJob?.cancel()
+    sessionErrorJob?.cancel()
+    sessionStateJob?.cancel()
+    presentationQueue?.stop()
+    presentationQueue = null
+    previousDeviceSessionState = null
 
-            // navigate back when state transitioned to STOPPED
-            if (currentState != prevState && currentState == StreamSessionState.STOPPED) {
-              stopStream()
-              wearablesViewModel.navigateToDeviceSelection()
+    _uiState.update { it.copy(streamingMode = StreamingMode.GLASSES) }
+
+    val queue =
+        PresentationQueue(
+            bufferDelayMs = 100L,
+            maxQueueSize = 15,
+            onFrameReady = { frame ->
+              viewModelScope.launch(Dispatchers.Main) {
+                _uiState.update {
+                  it.copy(videoFrame = frame.bitmap, videoFrameCount = it.videoFrameCount + 1)
+                }
+                geminiViewModel?.sendVideoFrameIfThrottled(frame.bitmap)
+                webrtcViewModel?.pushVideoFrame(frame.bitmap)
+              }
+            },
+        )
+    presentationQueue = queue
+    queue.start()
+
+    if (session == null) {
+      previousDeviceSessionState = null
+      Wearables.createSession(deviceSelector)
+          .onSuccess { createdSession ->
+            session = createdSession
+            sessionErrorJob = viewModelScope.launch {
+              createdSession.errors.collect { error -> handleSessionError(error) }
             }
+            session?.start()
           }
-        }
+          .onFailure { error, _ ->
+            Log.e(TAG, "Failed to create session: ${error.description}")
+            handleSessionError(error)
+          }
+      if (session == null) return
+    }
+    startStreamInternal()
   }
 
   fun startPhoneCamera(lifecycleOwner: LifecycleOwner) {
+    StreamingService.start(getApplication())
+
     val manager = PhoneCameraManager(getApplication())
     phoneCameraManager = manager
 
     manager.onFrameCaptured = { bitmap ->
-      _uiState.update { it.copy(videoFrame = bitmap) }
-      // Forward to Gemini (throttled inside the VM)
+      _uiState.update {
+        it.copy(
+            videoFrame = bitmap,
+            videoFrameCount = it.videoFrameCount + 1,
+            streamingMode = StreamingMode.PHONE,
+            streamState = StreamState.STREAMING,
+        )
+      }
       geminiViewModel?.sendVideoFrameIfThrottled(bitmap)
-      // Forward to WebRTC (every frame)
       webrtcViewModel?.pushVideoFrame(bitmap)
     }
 
     _uiState.update {
       it.copy(
-        streamingMode = StreamingMode.PHONE,
-        streamSessionState = StreamSessionState.STREAMING,
+          streamingMode = StreamingMode.PHONE,
+          streamState = StreamState.STREAMING,
       )
     }
     manager.start(lifecycleOwner)
     Log.d(TAG, "Phone camera mode started")
   }
 
+  private fun startStreamInternal() {
+    val videoQuality = wearablesViewModel.uiState.value.selectedVideoQuality
+    sessionStateJob = viewModelScope.launch {
+      session?.state?.collect { currentState ->
+        val prevState = previousDeviceSessionState
+        previousDeviceSessionState = currentState
+
+        if (currentState == DeviceSessionState.STARTED) {
+          wearablesViewModel.setDatAppUpdateRequired(false)
+          if (prevState == DeviceSessionState.PAUSED && stream != null) {
+            Log.d(TAG, "Session resumed from PAUSED — stream stays alive")
+            return@collect
+          }
+
+          videoJob?.cancel()
+          stateJob?.cancel()
+          errorJob?.cancel()
+          stream?.stop()
+          stream = null
+          session
+              ?.addStream(StreamConfiguration(videoQuality = videoQuality, frameRate = 24))
+              ?.onSuccess { addedStream ->
+                stream = addedStream
+                videoJob = viewModelScope.launch {
+                  stream?.videoStream?.collect { handleVideoFrame(it) }
+                }
+                stateJob = viewModelScope.launch {
+                  stream?.state?.collect { streamState ->
+                    val prevStreamState = _uiState.value.streamState
+                    _uiState.update { it.copy(streamState = streamState) }
+
+                    val wasActive = prevStreamState !in SESSION_TERMINAL_STATES
+                    val isTerminated = streamState in SESSION_TERMINAL_STATES
+                    if (wasActive && isTerminated) {
+                      stopStream()
+                      wearablesViewModel.navigateToDeviceSelection()
+                    }
+                  }
+                }
+                errorJob = viewModelScope.launch {
+                  stream?.errorStream?.collect { error ->
+                    if (error == StreamError.STREAM_ERROR) return@collect
+                    stopStream()
+                    wearablesViewModel.navigateToDeviceSelection()
+                    wearablesViewModel.setRecentError(error.description)
+                  }
+                }
+                stream?.start()
+              }
+              ?.onFailure { error, _ ->
+                Log.e(TAG, "Failed to add stream to session: ${error.description}")
+              }
+        } else if (currentState == DeviceSessionState.PAUSED) {
+          Log.d(TAG, "Session paused (tap gesture) — keeping stream alive for resume")
+        }
+      }
+    }
+  }
+
   fun stopStream() {
-    // Stop foreground service
     StreamingService.stop(getApplication())
+
+    phoneCameraManager?.stop()
+    phoneCameraManager = null
 
     videoJob?.cancel()
     videoJob = null
     stateJob?.cancel()
     stateJob = null
-    streamSession?.close()
-    streamSession = null
-    phoneCameraManager?.stop()
-    phoneCameraManager = null
+    errorJob?.cancel()
+    errorJob = null
+    sessionErrorJob?.cancel()
+    sessionErrorJob = null
+    sessionStateJob?.cancel()
+    sessionStateJob = null
+    presentationQueue?.stop()
+    presentationQueue = null
     _uiState.update { INITIAL_STATE }
+    stream?.stop()
+    stream = null
+    session?.stop()
+    session = null
   }
 
-  fun capturePhoto() {
-    if (uiState.value.isCapturing) {
-      Log.d(TAG, "Photo capture already in progress, ignoring request")
+  private fun handleSessionError(error: DeviceSessionError) {
+    Log.e(TAG, "Session error: ${error.description}")
+    val alreadyShowingUpdateRequired =
+        wearablesViewModel.uiState.value.isFirmwareUpdateRequired ||
+            wearablesViewModel.uiState.value.isDatAppUpdateRequired
+
+    if (
+        error == DeviceSessionError.SESSION_ENDED_BY_DEVICE &&
+            shouldTreatSessionEndedAsDatAppUpdateRequired()
+    ) {
+      wearablesViewModel.setDatAppUpdateRequired(true)
+      wearablesViewModel.setRecentError(
+          getApplication<Application>().getString(R.string.update_required_dat_app_message)
+      )
+      stopStream()
+      wearablesViewModel.navigateToDeviceSelection()
       return
     }
 
-    if (uiState.value.streamSessionState == StreamSessionState.STREAMING) {
-      // Phone mode: capture current video frame as photo
-      if (uiState.value.streamingMode == StreamingMode.PHONE) {
-        uiState.value.videoFrame?.let { frame ->
-          _uiState.update { it.copy(capturedPhoto = frame, isShareDialogVisible = true) }
-        }
-        return
-      }
+    if (alreadyShowingUpdateRequired && error == DeviceSessionError.SESSION_ENDED_BY_DEVICE) {
+      stopStream()
+      wearablesViewModel.navigateToDeviceSelection()
+      return
+    }
 
-      Log.d(TAG, "Starting photo capture")
+    if (error == DeviceSessionError.DAT_APP_ON_THE_GLASSES_UPDATE_REQUIRED) {
+      wearablesViewModel.setDatAppUpdateRequired(true)
+    }
+    wearablesViewModel.setRecentError(error.description)
+    stopStream()
+    wearablesViewModel.navigateToDeviceSelection()
+  }
+
+  private fun shouldTreatSessionEndedAsDatAppUpdateRequired(): Boolean {
+    val sessionNeverStarted =
+        previousDeviceSessionState != DeviceSessionState.STARTED &&
+            previousDeviceSessionState != DeviceSessionState.PAUSED
+    return sessionNeverStarted
+  }
+
+  fun capturePhoto() {
+    if (uiState.value.isCapturing) return
+
+    if (uiState.value.streamingMode == StreamingMode.PHONE) {
+      uiState.value.videoFrame?.let { frame ->
+        _uiState.update { it.copy(capturedPhoto = frame, isShareDialogVisible = true) }
+      }
+      return
+    }
+
+    if (uiState.value.streamState == StreamState.STREAMING) {
       _uiState.update { it.copy(isCapturing = true) }
 
       viewModelScope.launch {
-        streamSession
+        stream
             ?.capturePhoto()
             ?.onSuccess { photoData ->
-              Log.d(TAG, "Photo capture successful")
               handlePhotoData(photoData)
               _uiState.update { it.copy(isCapturing = false) }
             }
-            ?.onFailure {
-              Log.e(TAG, "Photo capture failed")
+            ?.onFailure { error, _ ->
+              Log.e(TAG, "Photo capture failed: ${error.description}")
               _uiState.update { it.copy(isCapturing = false) }
             }
       }
-    } else {
-      Log.w(
-          TAG,
-          "Cannot capture photo: stream not active (state=${uiState.value.streamSessionState})",
-      )
     }
   }
 
@@ -209,53 +343,22 @@ class StreamViewModel(
       chooser.flags = Intent.FLAG_ACTIVITY_NEW_TASK
       context.startActivity(chooser)
     } catch (e: IOException) {
-      Log.e("StreamViewModel", "Failed to share photo", e)
+      Log.e(TAG, "Failed to share photo", e)
     }
   }
 
   private fun handleVideoFrame(videoFrame: VideoFrame) {
-    // VideoFrame contains raw I420 video data in a ByteBuffer
-    val buffer = videoFrame.buffer
-    val dataSize = buffer.remaining()
-    val byteArray = ByteArray(dataSize)
-
-    // Save current position
-    val originalPosition = buffer.position()
-    buffer.get(byteArray)
-    // Restore position
-    buffer.position(originalPosition)
-
-    // Convert I420 to NV21 format which is supported by Android's YuvImage
-    val nv21 = convertI420toNV21(byteArray, videoFrame.width, videoFrame.height)
-    val image = YuvImage(nv21, ImageFormat.NV21, videoFrame.width, videoFrame.height, null)
-    val out =
-        ByteArrayOutputStream().use { stream ->
-          image.compressToJpeg(Rect(0, 0, videoFrame.width, videoFrame.height), 50, stream)
-          stream.toByteArray()
-        }
-
-    val bitmap = BitmapFactory.decodeByteArray(out, 0, out.size)
-    _uiState.update { it.copy(videoFrame = bitmap) }
-
-    // Forward to Gemini (throttled inside the VM)
-    geminiViewModel?.sendVideoFrameIfThrottled(bitmap)
-    // Forward to WebRTC (every frame)
-    webrtcViewModel?.pushVideoFrame(bitmap)
-  }
-
-  // Convert I420 (YYYYYYYY:UUVV) to NV21 (YYYYYYYY:VUVU)
-  private fun convertI420toNV21(input: ByteArray, width: Int, height: Int): ByteArray {
-    val output = ByteArray(input.size)
-    val size = width * height
-    val quarter = size / 4
-
-    input.copyInto(output, 0, 0, size) // Y is the same
-
-    for (n in 0 until quarter) {
-      output[size + n * 2] = input[size + quarter + n] // V first
-      output[size + n * 2 + 1] = input[size + n] // U second
+    val bitmap =
+        YuvToBitmapConverter.convert(
+            videoFrame.buffer,
+            videoFrame.width,
+            videoFrame.height,
+        )
+    if (bitmap != null) {
+      presentationQueue?.enqueue(bitmap, videoFrame.presentationTimeUs)
+    } else {
+      Log.e(TAG, "Failed to convert YUV to bitmap")
     }
-    return output
   }
 
   private fun handlePhotoData(photo: PhotoData) {
@@ -265,17 +368,12 @@ class StreamViewModel(
           is PhotoData.HEIC -> {
             val byteArray = ByteArray(photo.data.remaining())
             photo.data.get(byteArray)
-
-            // Extract EXIF transformation matrix and apply to bitmap
-            val exifInfo = getExifInfo(byteArray)
-            val transform = getTransform(exifInfo)
-            decodeHeic(byteArray, transform)
+            decodeHeic(byteArray, getTransform(getExifInfo(byteArray)))
           }
         }
     _uiState.update { it.copy(capturedPhoto = capturedPhoto, isShareDialogVisible = true) }
   }
 
-  // HEIC Decoding with EXIF transformation
   private fun decodeHeic(heicBytes: ByteArray, transform: Matrix): Bitmap {
     val bitmap = BitmapFactory.decodeByteArray(heicBytes, 0, heicBytes.size)
     return applyTransform(bitmap, transform)
@@ -283,7 +381,7 @@ class StreamViewModel(
 
   private fun getExifInfo(heicBytes: ByteArray): ExifInterface? {
     return try {
-      ByteArrayInputStream(heicBytes).use { inputStream -> ExifInterface(inputStream) }
+      ByteArrayInputStream(heicBytes).use { ExifInterface(it) }
     } catch (e: IOException) {
       Log.w(TAG, "Failed to read EXIF from HEIC", e)
       null
@@ -292,10 +390,7 @@ class StreamViewModel(
 
   private fun getTransform(exifInfo: ExifInterface?): Matrix {
     val matrix = Matrix()
-
-    if (exifInfo == null) {
-      return matrix // Identity matrix (no transformation)
-    }
+    if (exifInfo == null) return matrix
 
     when (
         exifInfo.getAttributeInt(
@@ -303,48 +398,30 @@ class StreamViewModel(
             ExifInterface.ORIENTATION_NORMAL,
         )
     ) {
-      ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> {
-        matrix.postScale(-1f, 1f)
-      }
-      ExifInterface.ORIENTATION_ROTATE_180 -> {
-        matrix.postRotate(180f)
-      }
-      ExifInterface.ORIENTATION_FLIP_VERTICAL -> {
-        matrix.postScale(1f, -1f)
-      }
+      ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> matrix.postScale(-1f, 1f)
+      ExifInterface.ORIENTATION_ROTATE_180 -> matrix.postRotate(180f)
+      ExifInterface.ORIENTATION_FLIP_VERTICAL -> matrix.postScale(1f, -1f)
       ExifInterface.ORIENTATION_TRANSPOSE -> {
         matrix.postRotate(90f)
         matrix.postScale(-1f, 1f)
       }
-      ExifInterface.ORIENTATION_ROTATE_90 -> {
-        matrix.postRotate(90f)
-      }
+      ExifInterface.ORIENTATION_ROTATE_90 -> matrix.postRotate(90f)
       ExifInterface.ORIENTATION_TRANSVERSE -> {
         matrix.postRotate(270f)
         matrix.postScale(-1f, 1f)
       }
-      ExifInterface.ORIENTATION_ROTATE_270 -> {
-        matrix.postRotate(270f)
-      }
+      ExifInterface.ORIENTATION_ROTATE_270 -> matrix.postRotate(270f)
       ExifInterface.ORIENTATION_NORMAL,
-      ExifInterface.ORIENTATION_UNDEFINED -> {
-        // No transformation needed
-      }
+      ExifInterface.ORIENTATION_UNDEFINED -> Unit
     }
-
     return matrix
   }
 
   private fun applyTransform(bitmap: Bitmap, matrix: Matrix): Bitmap {
-    if (matrix.isIdentity) {
-      return bitmap
-    }
-
+    if (matrix.isIdentity) return bitmap
     return try {
       val transformed = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
-      if (transformed != bitmap) {
-        bitmap.recycle()
-      }
+      if (transformed != bitmap) bitmap.recycle()
       transformed
     } catch (e: OutOfMemoryError) {
       Log.e(TAG, "Failed to apply transformation due to memory", e)
@@ -355,7 +432,6 @@ class StreamViewModel(
   override fun onCleared() {
     super.onCleared()
     stopStream()
-    stateJob?.cancel()
   }
 
   class Factory(
@@ -368,8 +444,7 @@ class StreamViewModel(
         return StreamViewModel(
             application = application,
             wearablesViewModel = wearablesViewModel,
-        )
-            as T
+        ) as T
       }
       throw IllegalArgumentException("Unknown ViewModel class")
     }

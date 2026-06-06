@@ -32,7 +32,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -52,6 +54,7 @@ fun HomeScreen(
     modifier: Modifier = Modifier,
 ) {
   val scrollState = rememberScrollState()
+  val uiState by viewModel.uiState.collectAsStateWithLifecycle()
   val activity = LocalActivity.current
   val context = LocalContext.current
 
@@ -124,6 +127,7 @@ fun HomeScreen(
         )
         SwitchButton(
             label = stringResource(R.string.register_button_title),
+            enabled = uiState.canStartRegistration,
             onClick = {
               activity?.let { viewModel.startRegistration(it) }
                   ?: Toast.makeText(context, "Activity not available", Toast.LENGTH_SHORT).show()

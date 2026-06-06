@@ -1,3 +1,11 @@
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * All rights reserved.
+ *
+ * This source code is licensed under the license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 package com.meta.wearable.dat.externalsampleapps.cameraaccess.ui
 
 import androidx.compose.foundation.layout.Arrangement
@@ -17,6 +25,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
@@ -28,6 +37,9 @@ fun ControlsRow(
     isAIActive: Boolean,
     onToggleLive: () -> Unit,
     isLiveActive: Boolean,
+    showCaptureButton: Boolean = true,
+    aiEnabled: Boolean = true,
+    liveEnabled: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     Row(
@@ -45,14 +57,14 @@ fun ControlsRow(
             modifier = Modifier.weight(1f),
         )
 
-        CaptureButton(
-            onClick = onCapturePhoto,
-        )
+        if (showCaptureButton) {
+            CaptureButton(onClick = onCapturePhoto)
+        }
 
-        // AI toggle button
         Button(
             onClick = onToggleAI,
-            modifier = Modifier.aspectRatio(1f),
+            enabled = aiEnabled,
+            modifier = Modifier.aspectRatio(1f).alpha(if (aiEnabled) 1f else 0.4f),
             colors = ButtonDefaults.buttonColors(
                 containerColor = if (isAIActive) AppColor.Green else AppColor.DeepBlue,
             ),
@@ -66,10 +78,10 @@ fun ControlsRow(
             )
         }
 
-        // Live toggle button
         Button(
             onClick = onToggleLive,
-            modifier = Modifier.aspectRatio(1f),
+            enabled = liveEnabled,
+            modifier = Modifier.aspectRatio(1f).alpha(if (liveEnabled) 1f else 0.4f),
             colors = ButtonDefaults.buttonColors(
                 containerColor = if (isLiveActive) AppColor.Red else AppColor.DeepBlue,
             ),
