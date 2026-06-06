@@ -17,6 +17,7 @@
 		8FD96B8D2E6F0A9800F56AB1 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 8FD96B772E6F0A9800F56AB1 /* Assets.xcassets */; };
 		8FD96B952E6F0F7D00F56AB1 /* MWDATCore in Frameworks */ = {isa = PBXBuildFile; productRef = 8FD96B942E6F0F7D00F56AB1 /* MWDATCore */; };
 		8FD96B952E6F0F7D00F56AB2 /* MWDATCamera in Frameworks */ = {isa = PBXBuildFile; productRef = 8FD96B942E6F0F7D00F56AB2 /* MWDATCamera */; };
+		8FD96B952E6F0F7D00F56AB3 /* MWDATDisplay in Frameworks */ = {isa = PBXBuildFile; productRef = 8FD96B942E6F0F7D00F56AB3 /* MWDATDisplay */; };
 		8FFD5FF52E8422580035E446 /* CircleButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FFD5FF22E8422580035E446 /* CircleButton.swift */; };
 		8FFD5FF62E8422580035E446 /* CustomButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FFD5FF32E8422580035E446 /* CustomButton.swift */; };
 		8FFD602C2E8433E20035E446 /* MockDeviceKitViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FFD60292E8433E20035E446 /* MockDeviceKitViewModel.swift */; };
@@ -36,6 +37,8 @@
 		9DD6CB0C2F3C648800ED7098 /* WebRTC in Frameworks */ = {isa = PBXBuildFile; productRef = 9DD6CB0B2F3C648800ED7098 /* WebRTC */; };
 		9DD6CB0E2F3C64F400ED7098 /* WebRTCOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DD6CB0D2F3C64F400ED7098 /* WebRTCOverlayView.swift */; };
 		9DD6CC002F4A000000ED7098 /* VideoDecoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DD6CBFF2F4A000000ED7098 /* VideoDecoder.swift */; };
+		D15D1A400000000000000004 /* HelloWorldDisplay.swift in Sources */ = {isa = PBXBuildFile; fileRef = D15D1A400000000000000002 /* HelloWorldDisplay.swift */; };
+		D15D1A400000000000000005 /* DisplayViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D15D1A400000000000000003 /* DisplayViewModel.swift */; };
 		9DD894B22F4047630090B9B9 /* SettingsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DD894AF2F4047630090B9B9 /* SettingsManager.swift */; };
 		9DD894B32F4047630090B9B9 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DD894B02F4047630090B9B9 /* SettingsView.swift */; };
 		9DD895962F405E0E0090B9B9 /* RTCVideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DD895952F405E0E0090B9B9 /* RTCVideoView.swift */; };
@@ -106,6 +109,8 @@
 		9DD6CB032F3C637D00ED7098 /* WebRTCSessionViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebRTCSessionViewModel.swift; sourceTree = "<group>"; };
 		9DD6CB0D2F3C64F400ED7098 /* WebRTCOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebRTCOverlayView.swift; sourceTree = "<group>"; };
 		9DD6CBFF2F4A000000ED7098 /* VideoDecoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoDecoder.swift; sourceTree = "<group>"; };
+		D15D1A400000000000000002 /* HelloWorldDisplay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelloWorldDisplay.swift; sourceTree = "<group>"; };
+		D15D1A400000000000000003 /* DisplayViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayViewModel.swift; sourceTree = "<group>"; };
 		9DD894AF2F4047630090B9B9 /* SettingsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsManager.swift; sourceTree = "<group>"; };
 		9DD894B02F4047630090B9B9 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		9DD895942F405E0E0090B9B9 /* PiPVideoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PiPVideoView.swift; sourceTree = "<group>"; };
@@ -139,6 +144,7 @@
 				8FD96B952E6F0F7D00F56AB1 /* MWDATCore in Frameworks */,
 				9DD6CAFE2F3C62DA00ED7098 /* WebRTC in Frameworks */,
 				8FD96B952E6F0F7D00F56AB2 /* MWDATCamera in Frameworks */,
+				8FD96B952E6F0F7D00F56AB3 /* MWDATDisplay in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -204,6 +210,7 @@
 			isa = PBXGroup;
 			children = (
 				9DD894B12F4047630090B9B9 /* Settings */,
+				D15D1A400000000000000001 /* Display */,
 				9DD6CB042F3C637D00ED7098 /* WebRTC */,
 				9DD6CAAD2F3C426600ED7098 /* Secrets.swift */,
 				9DD6CAAE2F3C426600ED7098 /* Secrets.swift.example */,
@@ -285,6 +292,15 @@
 				E66D30232E7DA71900470B48 /* MockDeviceKitButton.swift */,
 			);
 			path = MockDeviceKit;
+			sourceTree = "<group>";
+		};
+		D15D1A400000000000000001 /* Display */ = {
+			isa = PBXGroup;
+			children = (
+				D15D1A400000000000000002 /* HelloWorldDisplay.swift */,
+				D15D1A400000000000000003 /* DisplayViewModel.swift */,
+			);
+			path = Display;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -414,6 +430,8 @@
 				E6DA451F2E79A63100E3F688 /* MockDeviceKitView.swift in Sources */,
 				8FD96B872E6F0A9800F56AB1 /* StreamSessionViewModel.swift in Sources */,
 				9DD6CC002F4A000000ED7098 /* VideoDecoder.swift in Sources */,
+				D15D1A400000000000000004 /* HelloWorldDisplay.swift in Sources */,
+				D15D1A400000000000000005 /* DisplayViewModel.swift in Sources */,
 				8FD96B882E6F0A9800F56AB1 /* StreamSessionView.swift in Sources */,
 				8FFD60602E84A2F70035E446 /* MainAppView.swift in Sources */,
 				9DD6CB052F3C637D00ED7098 /* WebRTCSessionViewModel.swift in Sources */,
@@ -776,6 +794,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 9DD6CB0A2F3C648800ED7098 /* XCRemoteSwiftPackageReference "WebRTC" */;
 			productName = WebRTC;
+		};
+		8FD96B942E6F0F7D00F56AB3 /* MWDATDisplay */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 95F7F3332DEF0D91006D1C1A /* XCRemoteSwiftPackageReference "meta-wearables-dat-ios" */;
+			productName = MWDATDisplay;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

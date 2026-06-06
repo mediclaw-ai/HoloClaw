@@ -43,6 +43,8 @@
 		<string>$(META_APP_ID)</string>
 		<key>TeamID</key>
 		<string>$(DEVELOPMENT_TEAM)</string>
+		<key>DAMEnabled</key>
+		<true/>
 	</dict>
 	<key>NSAppTransportSecurity</key>
 	<dict>
@@ -51,6 +53,12 @@
 	</dict>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>Needed to connect to Meta AI Glasses</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>This lets the app connect to your glasses over Wi-Fi for the display experience.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_bonjour._tcp</string>
+	</array>
 	<key>NSBluetoothPeripheralUsageDescription</key>
 	<string>To listen to audio from Meta AI Glasses</string>
 	<key>NSCameraUsageDescription</key>
@@ -71,6 +79,7 @@
 		<string>audio</string>
 		<string>bluetooth-peripheral</string>
 		<string>external-accessory</string>
+		<string>bluetooth-central</string>
 	</array>
 	<key>UILaunchScreen</key>
 	<dict/>
