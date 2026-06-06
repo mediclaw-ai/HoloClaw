@@ -67,8 +67,11 @@ class StreamSessionViewModel: ObservableObject {
   // WebRTC Live streaming integration
   var webrtcSessionVM: WebRTCSessionViewModel?
 
-  // The core DAT SDK StreamSession - handles all streaming operations
-  private var streamSession: StreamSession
+  // The core DAT SDK objects. In SDK 0.7.0 streaming is session-scoped: a DeviceSession
+  // is created for the selected device and the camera Stream is added to it as a capability.
+  // Both are created lazily when the user starts streaming.
+  private var deviceSession: DeviceSession?
+  private var stream: MWDATCamera.Stream?
   // Listener tokens are used to manage DAT SDK event subscriptions
   private var stateListenerToken: AnyListenerToken?
   private var videoFrameListenerToken: AnyListenerToken?
@@ -77,6 +80,7 @@ class StreamSessionViewModel: ObservableObject {
   private let wearables: WearablesInterface
   private let deviceSelector: AutoDeviceSelector
   private var deviceMonitorTask: Task<Void, Never>?
+  private var sessionStateObserverTask: Task<Void, Never>?
   private var iPhoneCameraManager: IPhoneCameraManager?
 
   // CPU-based CIContext for rendering decoded pixel buffers in background
@@ -89,22 +93,24 @@ class StreamSessionViewModel: ObservableObject {
   init(wearables: WearablesInterface) {
     self.wearables = wearables
     // Let the SDK auto-select from available devices
-    self.deviceSelector = AutoDeviceSelector(wearables: wearables)
-    let config = StreamSessionConfig(
-      videoCodec: VideoCodec.raw,
-      resolution: StreamingResolution.low,
-      frameRate: 24)
-    streamSession = StreamSession(streamSessionConfig: config, deviceSelector: deviceSelector)
+    let selector = AutoDeviceSelector(wearables: wearables)
+    self.deviceSelector = selector
 
     // Monitor device availability
-    deviceMonitorTask = Task { @MainActor in
-      for await device in deviceSelector.activeDeviceStream() {
+    deviceMonitorTask = Task { @MainActor [weak self] in
+      for await device in selector.activeDeviceStream() {
+        guard let self else { return }
         self.hasActiveDevice = device != nil
       }
     }
 
     setupVideoDecoder()
-    attachListeners()
+  }
+
+  deinit {
+    deviceMonitorTask?.cancel()
+    sessionStateObserverTask?.cancel()
+    deviceSession?.stop()
   }
 
   private func setupVideoDecoder() {
@@ -129,23 +135,18 @@ class StreamSessionViewModel: ObservableObject {
     }
   }
 
-  /// Recreate the StreamSession with the current selectedResolution.
-  /// Only call when not actively streaming.
+  /// Update the resolution used for the next streaming session.
+  /// Only call when not actively streaming; the new resolution is applied
+  /// when the camera Stream is (re)created in `startSession()`.
   func updateResolution(_ resolution: StreamingResolution) {
     guard !isStreaming else { return }
     selectedResolution = resolution
-    let config = StreamSessionConfig(
-      videoCodec: VideoCodec.raw,
-      resolution: resolution,
-      frameRate: 24)
-    streamSession = StreamSession(streamSessionConfig: config, deviceSelector: deviceSelector)
-    attachListeners()
     NSLog("[Stream] Resolution changed to %@", resolutionLabel)
   }
 
-  private func attachListeners() {
+  private func setupListeners(for stream: MWDATCamera.Stream) {
     // Subscribe to session state changes using the DAT SDK listener pattern
-    stateListenerToken = streamSession.statePublisher.listen { [weak self] state in
+    stateListenerToken = stream.statePublisher.listen { [weak self] state in
       Task { @MainActor [weak self] in
         self?.updateStatusFromState(state)
       }
@@ -154,7 +155,7 @@ class StreamSessionViewModel: ObservableObject {
     // Subscribe to video frames from the device camera
     // This callback fires whether the app is in the foreground or background,
     // enabling continuous streaming even when the screen is locked.
-    videoFrameListenerToken = streamSession.videoFramePublisher.listen { [weak self] videoFrame in
+    videoFrameListenerToken = stream.videoFramePublisher.listen { [weak self] videoFrame in
       Task { @MainActor [weak self] in
         guard let self else { return }
 
@@ -208,7 +209,7 @@ class StreamSessionViewModel: ObservableObject {
     }
 
     // Subscribe to streaming errors
-    errorListenerToken = streamSession.errorPublisher.listen { [weak self] error in
+    errorListenerToken = stream.errorPublisher.listen { [weak self] error in
       Task { @MainActor [weak self] in
         guard let self else { return }
         // Suppress device-not-found errors when user hasn't started streaming yet
@@ -216,17 +217,17 @@ class StreamSessionViewModel: ObservableObject {
           if case .deviceNotConnected = error { return }
           if case .deviceNotFound = error { return }
         }
-        let newErrorMessage = formatStreamingError(error)
+        let newErrorMessage = self.formatStreamingError(error)
         if newErrorMessage != self.errorMessage {
-          showError(newErrorMessage)
+          self.showError(newErrorMessage)
         }
       }
     }
 
-    updateStatusFromState(streamSession.state)
+    updateStatusFromState(stream.state)
 
     // Subscribe to photo capture events
-    photoDataListenerToken = streamSession.photoDataPublisher.listen { [weak self] photoData in
+    photoDataListenerToken = stream.photoDataPublisher.listen { [weak self] photoData in
       Task { @MainActor [weak self] in
         guard let self else { return }
         if let uiImage = UIImage(data: photoData.data) {
@@ -235,6 +236,13 @@ class StreamSessionViewModel: ObservableObject {
         }
       }
     }
+  }
+
+  private func clearListeners() {
+    stateListenerToken = nil
+    videoFrameListenerToken = nil
+    errorListenerToken = nil
+    photoDataListenerToken = nil
   }
 
   func handleStartStreaming() async {
@@ -257,7 +265,134 @@ class StreamSessionViewModel: ObservableObject {
   }
 
   func startSession() async {
-    await streamSession.start()
+    guard stream == nil else { return }
+
+    let session: DeviceSession
+    do {
+      session = try await getOrCreateStartedSession()
+    } catch DeviceSessionError.datAppOnTheGlassesUpdateRequired {
+      showError(DeviceSessionError.datAppOnTheGlassesUpdateRequired.localizedDescription)
+      return
+    } catch {
+      showError("Failed to start session: \(error.localizedDescription)")
+      return
+    }
+
+    guard session.state == .started else {
+      showError("Device session is not ready. Please try again.")
+      return
+    }
+
+    let config = StreamConfiguration(
+      videoCodec: VideoCodec.raw,
+      resolution: selectedResolution,
+      frameRate: 24)
+
+    guard let newStream = try? session.addStream(config: config) else {
+      showError("Failed to start camera stream. Please try again.")
+      return
+    }
+    stream = newStream
+    streamingStatus = .waiting
+    setupListeners(for: newStream)
+    await newStream.start()
+  }
+
+  /// Returns a DeviceSession in the `.started` state, reusing the existing one when possible.
+  /// Streaming is scoped to a started DeviceSession in SDK 0.7.0.
+  private func getOrCreateStartedSession() async throws -> DeviceSession {
+    if let session = deviceSession, session.state == .started {
+      return session
+    }
+
+    if deviceSession?.state == .stopped {
+      deviceSession = nil
+    }
+
+    // Wait for an in-progress session to finish starting.
+    if let session = deviceSession {
+      // The session may have already transitioned to .started before the
+      // for-await loop begins iterating (stateStream doesn't buffer past events).
+      if session.state == .started {
+        startSessionStateObserver(for: session)
+        return session
+      }
+      try await waitForSessionStart(
+        stateStream: session.stateStream(),
+        errorStream: session.errorStream())
+      startSessionStateObserver(for: session)
+      return session
+    }
+
+    // Create a new session for the auto-selected device.
+    do {
+      let session = try wearables.createSession(deviceSelector: deviceSelector)
+      deviceSession = session
+
+      let stateStream = session.stateStream()
+      let errorStream = session.errorStream()
+      try session.start()
+
+      // The state change may be delivered on another thread before the
+      // for-await loop begins iterating, and the stream does not buffer.
+      if session.state == .started {
+        startSessionStateObserver(for: session)
+        return session
+      }
+      try await waitForSessionStart(stateStream: stateStream, errorStream: errorStream)
+      startSessionStateObserver(for: session)
+      return session
+    } catch {
+      deviceSession = nil
+      throw error
+    }
+  }
+
+  private func waitForSessionStart(
+    stateStream: AsyncStream<DeviceSessionState>,
+    errorStream: AsyncStream<DeviceSessionError>
+  ) async throws {
+    try await withThrowingTaskGroup(of: Void.self) { group in
+      group.addTask {
+        for await state in stateStream {
+          if state == .started { return }
+          if state == .stopped {
+            throw DeviceSessionError.unexpectedError(description: "The session failed to start")
+          }
+        }
+        guard !Task.isCancelled else { return }
+        throw DeviceSessionError.unexpectedError(description: "The session failed to start")
+      }
+
+      group.addTask {
+        for await sessionError in errorStream {
+          throw sessionError
+        }
+        guard !Task.isCancelled else { return }
+        throw DeviceSessionError.unexpectedError(description: "The session failed to start")
+      }
+
+      guard try await group.next() != nil else {
+        throw DeviceSessionError.unexpectedError(description: "The session failed to start")
+      }
+      group.cancelAll()
+    }
+  }
+
+  /// Drops the cached device session once it reaches `.stopped` so a fresh one is
+  /// created on the next start.
+  private func startSessionStateObserver(for session: DeviceSession) {
+    sessionStateObserverTask?.cancel()
+    sessionStateObserverTask = Task { @MainActor [weak self] in
+      for await state in session.stateStream() {
+        guard let self else { return }
+        if state == .stopped {
+          self.deviceSession = nil
+          self.sessionStateObserverTask = nil
+          return
+        }
+      }
+    }
   }
 
   private func showError(_ message: String) {
@@ -270,7 +405,13 @@ class StreamSessionViewModel: ObservableObject {
       stopIPhoneSession()
       return
     }
-    await streamSession.stop()
+    let activeStream = stream
+    stream = nil
+    clearListeners()
+    streamingStatus = .stopped
+    currentVideoFrame = nil
+    hasReceivedFirstFrame = false
+    await activeStream?.stop()
   }
 
   // MARK: - iPhone Camera Mode
@@ -320,7 +461,7 @@ class StreamSessionViewModel: ObservableObject {
   }
 
   func capturePhoto() {
-    streamSession.capturePhoto(format: .jpeg)
+    stream?.capturePhoto(format: .jpeg)
   }
 
   func dismissPhotoPreview() {
@@ -328,7 +469,7 @@ class StreamSessionViewModel: ObservableObject {
     capturedPhoto = nil
   }
 
-  private func updateStatusFromState(_ state: StreamSessionState) {
+  private func updateStatusFromState(_ state: StreamState) {
     switch state {
     case .stopped:
       currentVideoFrame = nil
@@ -340,7 +481,7 @@ class StreamSessionViewModel: ObservableObject {
     }
   }
 
-  private func formatStreamingError(_ error: StreamSessionError) -> String {
+  private func formatStreamingError(_ error: StreamError) -> String {
     switch error {
     case .internalError:
       return "An internal error occurred. Please try again."
@@ -352,12 +493,16 @@ class StreamSessionViewModel: ObservableObject {
       return "The operation timed out. Please try again."
     case .videoStreamingError:
       return "Video streaming failed. Please try again."
-    case .audioStreamingError:
-      return "Audio streaming failed. Please try again."
     case .permissionDenied:
       return "Camera permission denied. Please grant permission in Settings."
     case .hingesClosed:
       return "The hinges on the glasses were closed. Please open the hinges and try again."
+    case .thermalCritical, .thermalEmergency:
+      return "The glasses are too hot to keep streaming. Please let them cool down and try again."
+    case .peakPowerShutdown:
+      return "The glasses shut down to protect the battery. Please try again."
+    case .batteryCritical:
+      return "The glasses' battery is too low to stream. Please charge them and try again."
     @unknown default:
       return "An unknown streaming error occurred."
     }
