@@ -13,6 +13,9 @@ class GeminiSessionViewModel: ObservableObject {
   @Published var openClawConnectionState: OpenClawConnectionState = .notConfigured
   // Widgets to render in the field of view, set from Gemini `render_widgets` calls.
   @Published var widgets: [WidgetSpec] = []
+  // Notifies the host when Gemini renders widgets, so it can also push them to the
+  // glasses Display (SDK) during streaming.
+  var onWidgetsRendered: (([WidgetSpec]) -> Void)?
   private let geminiService = GeminiLiveService()
   private let openClawBridge = OpenClawBridge()
   private var toolCallRouter: ToolCallRouter?
@@ -208,6 +211,7 @@ class GeminiSessionViewModel: ObservableObject {
   private func handleRenderWidgets(_ call: GeminiFunctionCall) {
     let specs = WidgetSpec.list(from: call.args)
     widgets = specs
+    onWidgetsRendered?(specs)
     NSLog("[Widgets] render_widgets -> %d widget(s)", specs.count)
     let response: [String: Any] = [
       "toolResponse": [

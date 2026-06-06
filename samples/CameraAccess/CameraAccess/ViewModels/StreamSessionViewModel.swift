@@ -19,6 +19,7 @@ import CoreMedia
 import CoreVideo
 import MWDATCamera
 import MWDATCore
+import MWDATDisplay
 import SwiftUI
 import VideoToolbox
 
@@ -72,6 +73,12 @@ class StreamSessionViewModel: ObservableObject {
   // Both are created lazily when the user starts streaming.
   private var deviceSession: DeviceSession?
   private var stream: MWDATCamera.Stream?
+  // Glasses Display capability, attached to the SAME DeviceSession during glasses
+  // streaming so Gemini widgets render on the glasses (the SDK path), the same way
+  // the "Hello World on Display" flow does.
+  private var glassesDisplay: MWDATDisplay.Display?
+  private var glassesDisplayToken: AnyListenerToken?
+  private var pendingGlassesBoard: MWDATDisplay.FlexBox?
   // Listener tokens are used to manage DAT SDK event subscriptions
   private var stateListenerToken: AnyListenerToken?
   private var videoFrameListenerToken: AnyListenerToken?
@@ -284,7 +291,7 @@ class StreamSessionViewModel: ObservableObject {
     }
 
     let config = StreamConfiguration(
-      videoCodec: VideoCodec.raw,
+      videoCodec: MWDATCamera.VideoCodec.raw,
       resolution: selectedResolution,
       frameRate: 24)
 
@@ -388,6 +395,9 @@ class StreamSessionViewModel: ObservableObject {
         guard let self else { return }
         if state == .stopped {
           self.deviceSession = nil
+          self.glassesDisplay = nil
+          self.glassesDisplayToken = nil
+          self.pendingGlassesBoard = nil
           self.sessionStateObserverTask = nil
           return
         }
@@ -398,6 +408,59 @@ class StreamSessionViewModel: ObservableObject {
   private func showError(_ message: String) {
     errorMessage = message
     showError = true
+  }
+
+  /// Renders the given widgets on the glasses Display (SDK path) by attaching a
+  /// Display capability to the active streaming DeviceSession — the same mechanism
+  /// as "Hello World on Display". Only applies when streaming from glasses; in
+  /// iPhone mode there is no DeviceSession, so this is a no-op.
+  func sendWidgetsToGlasses(_ specs: [WidgetSpec]) async {
+    guard streamingMode == .glasses,
+          let session = deviceSession, session.state == .started else { return }
+
+    let board = DisplayWidgets.board(for: specs)
+
+    // Display already running: just send (each send replaces the current content).
+    if let display = glassesDisplay, display.state == .started {
+      do {
+        try await display.send(board)
+      } catch {
+        NSLog("[Display] send to glasses failed: %@", error.localizedDescription)
+      }
+      return
+    }
+
+    // Otherwise queue this board and attach a Display capability to the session once.
+    pendingGlassesBoard = board
+    guard glassesDisplay == nil else { return }
+    do {
+      let display = try session.addDisplay()
+      glassesDisplay = display
+      glassesDisplayToken = display.statePublisher.listen { [weak self] state in
+        Task { @MainActor [weak self] in
+          guard let self else { return }
+          switch state {
+          case .started:
+            if let pending = self.pendingGlassesBoard {
+              self.pendingGlassesBoard = nil
+              try? await self.glassesDisplay?.send(pending)
+            }
+          case .stopped:
+            self.glassesDisplayToken = nil
+            self.glassesDisplay = nil
+          default:
+            break
+          }
+        }
+      }
+      await display.start()
+    } catch {
+      // e.g. the connected glasses don't support a display — widgets still show on
+      // the phone overlay.
+      NSLog("[Display] addDisplay on streaming session failed: %@", error.localizedDescription)
+      glassesDisplay = nil
+      pendingGlassesBoard = nil
+    }
   }
 
   func stopSession() async {
@@ -412,6 +475,12 @@ class StreamSessionViewModel: ObservableObject {
     currentVideoFrame = nil
     hasReceivedFirstFrame = false
     await activeStream?.stop()
+    // Tear down the glasses Display capability alongside the camera stream.
+    glassesDisplayToken = nil
+    pendingGlassesBoard = nil
+    let activeDisplay = glassesDisplay
+    glassesDisplay = nil
+    await activeDisplay?.stop()
   }
 
   // MARK: - iPhone Camera Mode
