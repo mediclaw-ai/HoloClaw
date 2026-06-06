@@ -76,4 +76,10 @@
     <string name="getting_started_tip_led" description="Tip about capture LED">The capture LED lets others know when you\'re capturing content or going live.</string>
     <string name="getting_started_tip_photo" description="Tip about photo capture">Capture photos by tapping the camera button.</string>
     <string name="getting_started_continue" description="Continue button">Continue</string>
+
+    <!-- Display capability -->
+    <string name="display_hello_world_button_title" description="Send Hello World to Ray-Ban Display">Hello World on Display</string>
+    <string name="display_connecting_button_title" description="Connecting to display glasses">Connecting to display…</string>
+    <string name="display_error_title" description="Display error dialog title">Display Error</string>
+    <string name="ok" description="OK button">OK</string>
 </resources>
