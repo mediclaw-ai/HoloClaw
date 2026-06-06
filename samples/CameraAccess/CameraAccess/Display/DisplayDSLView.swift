@@ -54,12 +54,14 @@ private struct FlexBoxView: View {
       HStack(alignment: crossVerticalAlignment, spacing: flexBox.spacing) {
         ForEach(Array(orderedChildren.enumerated()), id: \.offset) { item in
           ComponentView(component: item.element)
+            .modifier(FlexGrowModifier(component: item.element, isRow: true))
         }
       }
     default:  // .column / .columnReverse / future
       VStack(alignment: crossHorizontalAlignment, spacing: flexBox.spacing) {
         ForEach(Array(orderedChildren.enumerated()), id: \.offset) { item in
           ComponentView(component: item.element)
+            .modifier(FlexGrowModifier(component: item.element, isRow: false))
         }
       }
     }
@@ -117,6 +119,26 @@ private struct TapModifier: ViewModifier {
   func body(content: Content) -> some View {
     if let onTap {
       content.onTapGesture { onTap() }
+    } else {
+      content
+    }
+  }
+}
+
+/// Honors a child FlexBox's `flexGrow` by letting it expand along the parent axis
+/// (e.g. equal-width table columns in a row).
+private struct FlexGrowModifier: ViewModifier {
+  let component: any MWDATDisplay.ViewComponent
+  let isRow: Bool
+
+  @ViewBuilder
+  func body(content: Content) -> some View {
+    if let flexBox = component as? MWDATDisplay.FlexBox, flexBox.flexGrow > 0 {
+      if isRow {
+        content.frame(maxWidth: .infinity)
+      } else {
+        content.frame(maxHeight: .infinity)
+      }
     } else {
       content
     }

@@ -11,6 +11,8 @@ class GeminiSessionViewModel: ObservableObject {
   @Published var aiTranscript: String = ""
   @Published var toolCallStatus: ToolCallStatus = .idle
   @Published var openClawConnectionState: OpenClawConnectionState = .notConfigured
+  // Widgets to render in the field of view, set from Gemini `render_widgets` calls.
+  @Published var widgets: [WidgetSpec] = []
   private let geminiService = GeminiLiveService()
   private let openClawBridge = OpenClawBridge()
   private var toolCallRouter: ToolCallRouter?
@@ -95,8 +97,16 @@ class GeminiSessionViewModel: ObservableObject {
       guard let self else { return }
       Task { @MainActor in
         for call in toolCall.functionCalls {
-          self.toolCallRouter?.handleToolCall(call) { [weak self] response in
-            self?.geminiService.sendToolResponse(response)
+          // `execute` decides the action: render widgets in the UI, or delegate a
+          // real-world task to OpenClaw.
+          let action = (call.args["action"] as? String)?.lowercased()
+          let hasWidgets = ((call.args["widgets"] as? [[String: Any]])?.isEmpty == false)
+          if action == "render" || hasWidgets {
+            self.handleRenderWidgets(call)
+          } else {
+            self.toolCallRouter?.handleToolCall(call) { [weak self] response in
+              self?.geminiService.sendToolResponse(response)
+            }
           }
         }
       }
@@ -190,6 +200,27 @@ class GeminiSessionViewModel: ObservableObject {
     userTranscript = ""
     aiTranscript = ""
     toolCallStatus = .idle
+    widgets = []
+  }
+
+  /// Handles the Gemini `render_widgets` tool call: decodes the widgets, shows them
+  /// in the field of view, and acknowledges the call.
+  private func handleRenderWidgets(_ call: GeminiFunctionCall) {
+    let specs = WidgetSpec.list(from: call.args)
+    widgets = specs
+    NSLog("[Widgets] render_widgets -> %d widget(s)", specs.count)
+    let response: [String: Any] = [
+      "toolResponse": [
+        "functionResponses": [
+          [
+            "id": call.id,
+            "name": call.name,
+            "response": ["result": "Displayed \(specs.count) widget(s) in the field of view."],
+          ]
+        ]
+      ]
+    ]
+    geminiService.sendToolResponse(response)
   }
 
   func sendVideoFrameIfThrottled(image: UIImage) {

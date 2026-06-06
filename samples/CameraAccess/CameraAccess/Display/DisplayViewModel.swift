@@ -56,6 +56,16 @@ final class DisplayViewModel: ObservableObject {
     await send(HelloWorldDisplay.helloWorld())
   }
 
+  /// Sends the SDK (FlexBox DSL) schedule table to the glasses display.
+  func sendTable() async {
+    await send(DisplayWidgets.table())
+  }
+
+  /// Sends the SDK (FlexBox DSL) image card to the glasses display.
+  func sendImageCard() async {
+    await send(DisplayWidgets.imageCard())
+  }
+
   /// Stops the Display capability and the underlying device session.
   func disconnect() async {
     displayStateToken = nil
