@@ -27,12 +27,12 @@ enum HelloWorldDisplay {
       direction: .column,
       spacing: 8,
       alignment: .center,
-      crossAlignment: .center
+      crossAlignment: .center,
+      padding: EdgeInsets(all: 24)
     ) {
       Text("Hello World", style: .heading)
       Text("Sent from VisionClaw", style: .body, color: .secondary)
     }
-    .padding(24)
     .background(.card)
   }
 }

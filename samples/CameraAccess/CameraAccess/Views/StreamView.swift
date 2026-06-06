@@ -51,6 +51,19 @@ struct StreamView: View {
           .foregroundColor(.white)
       }
 
+      // iPhone mode: render the same MWDATDisplay "Hello World" FlexBox natively
+      // on the phone screen (the SDK only sends Display views to the glasses, so
+      // DisplayDSLView interprets the same component model here).
+      if viewModel.streamingMode == .iPhone {
+        VStack {
+          DisplayDSLView(flexBox: HelloWorldDisplay.helloWorld())
+            .padding(.top, 70)
+          Spacer()
+        }
+        .frame(maxWidth: .infinity)
+        .allowsHitTesting(false)
+      }
+
       // Gemini status overlay (top) + speaking indicator
       if geminiVM.isGeminiActive {
         VStack {
