@@ -44,6 +44,11 @@ struct StreamSessionView: View {
       viewModel.geminiSessionVM = geminiVM
       viewModel.webrtcSessionVM = webrtcVM
       geminiVM.streamingMode = viewModel.streamingMode
+      // While streaming from glasses, also push Gemini's widgets to the glasses
+      // Display (SDK), the same way "Hello World on Display" does.
+      geminiVM.onWidgetsRendered = { [weak viewModel] specs in
+        Task { @MainActor in await viewModel?.sendWidgetsToGlasses(specs) }
+      }
     }
     .onChange(of: viewModel.streamingMode) { newMode in
       geminiVM.streamingMode = newMode
