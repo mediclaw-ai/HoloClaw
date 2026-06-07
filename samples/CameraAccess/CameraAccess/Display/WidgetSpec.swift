@@ -47,7 +47,9 @@ enum WidgetImageKind: String, Sendable, CaseIterable {
 struct WidgetSpec: Identifiable, Sendable {
   enum Kind: Sendable {
     case text(title: String?, body: String)
-    case image(kind: WidgetImageKind, caption: String?)
+    // `url` is resolved from a fixed WidgetImageKind for Gemini render calls, or is
+    // an arbitrary public URL for app-generated images (e.g. from OpenClaw).
+    case image(url: String, caption: String?)
     case table(title: String?, columns: [String]?, rows: [[String]])
   }
 
@@ -72,9 +74,12 @@ extension WidgetSpec {
       self.kind = .text(title: title, body: body)
 
     case "image":
+      // render_widgets only offers fixed image kinds, so resolve the URL from the kind.
       let kindString = ((dict["imageKind"] as? String) ?? (dict["kind"] as? String) ?? "map").lowercased()
       let imageKind = WidgetImageKind(rawValue: kindString) ?? .map
-      self.kind = .image(kind: imageKind, caption: dict["caption"] as? String)
+      let provided = dict["caption"] as? String
+      let caption = (provided?.isEmpty == false) ? provided! : imageKind.defaultCaption
+      self.kind = .image(url: imageKind.url, caption: caption)
 
     case "table":
       let columns = (dict["columns"] as? [Any])?.map { Self.string($0) }

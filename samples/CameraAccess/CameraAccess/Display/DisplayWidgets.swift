@@ -87,13 +87,13 @@ enum DisplayWidgets {
       }
       .background(.card)
 
-    case let .image(kind, caption):
+    case let .image(url, caption):
       return FlexBox(
         direction: .column, spacing: 8, alignment: .center, crossAlignment: .stretch,
         padding: EdgeInsets(all: 16)
       ) {
-        Image(uri: kind.url, sizePreset: .fill, cornerRadius: .medium)
-        Text((caption?.isEmpty == false) ? caption! : kind.defaultCaption, style: .body, color: .secondary)
+        Image(uri: url, sizePreset: .fill, cornerRadius: .medium)
+        Text((caption?.isEmpty == false) ? caption! : "Image", style: .body, color: .secondary)
       }
       .background(.card)
 
