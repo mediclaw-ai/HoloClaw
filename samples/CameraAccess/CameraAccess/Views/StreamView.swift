@@ -58,13 +58,20 @@ struct StreamView: View {
       if !geminiVM.widgets.isEmpty {
         ScrollView {
           VStack(spacing: 18) {
-            VStack(spacing: 8) {
-              widgetLabel("SDK · MWDATDisplay (FlexBox)")
+            if viewModel.streamingMode == .glasses {
+              // Start streaming: keep both renderings on the phone (the SDK widgets
+              // also render on the glasses Display).
+              VStack(spacing: 8) {
+                widgetLabel("SDK · MWDATDisplay (FlexBox)")
+                DisplayDSLView(flexBox: DisplayWidgets.board(for: geminiVM.widgets))
+              }
+              VStack(spacing: 8) {
+                widgetLabel("SwiftUI · native")
+                WidgetBoardView(widgets: geminiVM.widgets)
+              }
+            } else {
+              // Start on iPhone: render each widget once (the SDK display rendering).
               DisplayDSLView(flexBox: DisplayWidgets.board(for: geminiVM.widgets))
-            }
-            VStack(spacing: 8) {
-              widgetLabel("SwiftUI · native")
-              WidgetBoardView(widgets: geminiVM.widgets)
             }
           }
           .frame(maxWidth: 360)

@@ -51,14 +51,12 @@ struct NonStreamView: View {
         Spacer()
 
         VStack(spacing: 12) {
-          Image(.cameraAccessIcon)
+          Image(.logo)
             .resizable()
-            .renderingMode(.template)
-            .foregroundColor(.white)
             .aspectRatio(contentMode: .fit)
-            .frame(width: 120)
+            .frame(width: 140)
 
-          Text("Stream Your Glasses Camera")
+          Text("Welcome to HoloClaw")
             .font(.system(size: 20, weight: .semibold))
             .foregroundColor(.white)
 
@@ -127,7 +125,7 @@ struct NonStreamView: View {
 
         // Display capability demo: render "Hello World" on Ray-Ban Display glasses.
         CustomButton(
-          title: displayVM.isConnecting ? "Connecting to display…" : "Hello World on Display",
+          title: displayVM.isConnecting ? "Connecting to display…" : "Test the Display",
           style: .secondary,
           isDisabled: displayVM.isConnecting
         ) {

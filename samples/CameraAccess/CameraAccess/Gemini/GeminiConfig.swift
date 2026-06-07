@@ -25,7 +25,7 @@ enum GeminiConfig {
        - text: a short note (set "title" and "body").
        - table: structured rows (set "columns" and "rows", where rows is a list of lists of cell strings).
        - image: set "imageKind" to "map" (a location/Google map), "gallery" (photos), or "calendar" (dates/scheduling), plus a short "caption".
-       Each render REPLACES the cards currently shown, so send the full set you want visible. Use it whenever the user asks to see / show / display / pull up / update something, or whenever a visual strengthens your answer.
+       Each render REPLACES the cards currently shown, so send the full set you want visible. Use it whenever the user asks to see / show / display / pull up / update something, or whenever a visual strengthens your answer. Treat phrasings like "show me a table", "show me a map", "create me a table", "show me a calendar", or "show me the photos" as explicit requests to render the matching widget(s).
 
     2) action="delegate" -- perform a REAL-WORLD action through a powerful personal assistant (the only way anything real happens). Put a clear, detailed "task". Use it whenever the user asks you to:
        - Send a message to someone (any platform: WhatsApp, Telegram, iMessage, Slack, etc.)
