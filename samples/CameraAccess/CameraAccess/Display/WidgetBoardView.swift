@@ -35,10 +35,10 @@ private struct WidgetCard: View {
     switch widget.kind {
     case let .text(title, content):
       TextWidgetCard(title: title, bodyText: content)
-    case let .image(kind, caption):
+    case let .image(url, caption):
       NativeImageWidget(
-        imageURL: URL(string: kind.url),
-        caption: (caption?.isEmpty == false) ? caption! : kind.defaultCaption
+        imageURL: URL(string: url),
+        caption: (caption?.isEmpty == false) ? caption! : "Image"
       )
     case let .table(title, columns, rows):
       DynamicTableWidget(title: title, columns: columns, rows: rows)
@@ -121,7 +121,7 @@ private struct DynamicTableWidget: View {
     ScrollView {
       WidgetBoardView(widgets: [
         WidgetSpec(kind: .text(title: "Vienna afternoon", body: "Here's a quick plan for the old town.")),
-        WidgetSpec(kind: .image(kind: .map, caption: "Hofburg area")),
+        WidgetSpec(kind: .image(url: WidgetImageKind.map.url, caption: "Hofburg area")),
         WidgetSpec(kind: .table(
           title: "Schedule",
           columns: ["Time", "Stop"],

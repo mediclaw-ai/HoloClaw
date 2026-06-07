@@ -107,8 +107,11 @@ class GeminiSessionViewModel: ObservableObject {
           if action == "render" || hasWidgets {
             self.handleRenderWidgets(call)
           } else {
+            let task = call.args["task"] as? String
             self.toolCallRouter?.handleToolCall(call) { [weak self] response in
-              self?.geminiService.sendToolResponse(response)
+              guard let self else { return }
+              self.geminiService.sendToolResponse(response)
+              self.maybeRenderResultLink(task: task, response: response)
             }
           }
         }
@@ -225,6 +228,48 @@ class GeminiSessionViewModel: ObservableObject {
       ]
     ]
     geminiService.sendToolResponse(response)
+  }
+
+  /// If a delegated music/vibe task returns a public URL (e.g. an Eleven Labs
+  /// track), show that URL as a text widget — on the phone and the glasses.
+  private func maybeRenderResultLink(task: String?, response: [String: Any]) {
+    guard let result = Self.resultString(from: response),
+          let url = Self.firstURL(in: result) else { return }
+    let taskLower = (task ?? "").lowercased()
+    let urlLower = url.lowercased()
+
+    let isImage = taskLower.contains("image") || taskLower.contains("picture")
+      || taskLower.contains("photo")
+      || ["png", "jpg", "jpeg", "webp", "gif", "heic"].contains { urlLower.contains(".\($0)") }
+    let isMusic = taskLower.contains("eleven") || taskLower.contains("music")
+      || taskLower.contains("vibe")
+      || ["mp3", "wav", "m4a", "aac", "ogg", "flac"].contains { urlLower.contains(".\($0)") }
+
+    let widget: WidgetSpec
+    if isImage {
+      widget = WidgetSpec(kind: .image(url: url, caption: "Generated image"))
+    } else if isMusic {
+      widget = WidgetSpec(kind: .text(title: "Your vibe track 🎵", body: url))
+    } else {
+      return
+    }
+    widgets = [widget]
+    onWidgetsRendered?([widget])
+    NSLog("[Widgets] auto-rendered %@ link: %@", isImage ? "image" : "music", url)
+  }
+
+  private static func resultString(from response: [String: Any]) -> String? {
+    guard let toolResponse = response["toolResponse"] as? [String: Any],
+          let functionResponses = toolResponse["functionResponses"] as? [[String: Any]],
+          let resp = functionResponses.first?["response"] as? [String: Any] else { return nil }
+    return (resp["result"] as? String) ?? (resp["error"] as? String)
+  }
+
+  private static func firstURL(in text: String) -> String? {
+    guard let detector = try? NSDataDetector(
+      types: NSTextCheckingResult.CheckingType.link.rawValue) else { return nil }
+    let range = NSRange(text.startIndex..., in: text)
+    return detector.firstMatch(in: text, options: [], range: range)?.url?.absoluteString
   }
 
   func sendVideoFrameIfThrottled(image: UIImage) {
