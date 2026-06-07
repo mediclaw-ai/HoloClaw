@@ -90,7 +90,7 @@ fun CameraAccessScaffold(
                 wearablesViewModel = viewModel,
                 isPhoneMode = uiState.isPhoneMode,
             )
-        uiState.isRegistered ->
+        uiState.isRegistered || uiState.hasMockDevice ->
             NonStreamScreen(
                 viewModel = viewModel,
                 onRequestWearablesPermission = onRequestWearablesPermission,

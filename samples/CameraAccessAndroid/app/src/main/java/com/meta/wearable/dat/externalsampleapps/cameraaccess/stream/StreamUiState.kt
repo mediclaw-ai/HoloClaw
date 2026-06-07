@@ -19,6 +19,7 @@ enum class StreamingMode {
 data class StreamUiState(
     val streamState: StreamState = StreamState.STOPPED,
     val videoFrame: Bitmap? = null,
+    val hasReceivedFirstFrame: Boolean = false,
     val videoFrameCount: Int = 0,
     val capturedPhoto: Bitmap? = null,
     val isShareDialogVisible: Boolean = false,

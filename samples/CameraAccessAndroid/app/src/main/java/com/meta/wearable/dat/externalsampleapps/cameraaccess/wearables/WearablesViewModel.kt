@@ -15,6 +15,8 @@ import androidx.lifecycle.viewModelScope
 import com.meta.wearable.dat.camera.types.VideoQuality
 import com.meta.wearable.dat.core.Wearables
 import com.meta.wearable.dat.core.selectors.AutoDeviceSelector
+import com.meta.wearable.dat.externalsampleapps.cameraaccess.BuildConfig
+import com.meta.wearable.dat.mockdevice.MockDeviceKit
 import com.meta.wearable.dat.core.selectors.DeviceSelector
 import com.meta.wearable.dat.core.types.DeviceCompatibility
 import com.meta.wearable.dat.core.types.DeviceIdentifier
@@ -65,8 +67,19 @@ class WearablesViewModel(application: Application) : AndroidViewModel(applicatio
       Wearables.devices.collect { value ->
         _uiState.update { it.copy(devices = value.toList().toImmutableList()) }
         monitorDeviceCompatibility(value)
+        refreshMockDeviceState()
       }
     }
+  }
+
+  fun refreshMockDeviceState() {
+    if (!BuildConfig.DEBUG) {
+      _uiState.update { it.copy(hasMockDevice = false) }
+      return
+    }
+    val hasMock =
+        MockDeviceKit.getInstance(getApplication()).pairedDevices.isNotEmpty()
+    _uiState.update { it.copy(hasMockDevice = hasMock) }
   }
 
   private fun monitorDeviceCompatibility(devices: Set<DeviceIdentifier>) {
@@ -165,6 +178,7 @@ class WearablesViewModel(application: Application) : AndroidViewModel(applicatio
 
   fun hideDebugMenu() {
     _uiState.update { it.copy(isDebugMenuVisible = false) }
+    refreshMockDeviceState()
   }
 
   fun clearRecentError() {

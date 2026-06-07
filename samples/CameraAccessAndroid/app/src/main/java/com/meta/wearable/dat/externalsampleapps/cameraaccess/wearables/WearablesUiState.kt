@@ -24,6 +24,7 @@ data class WearablesUiState(
     val isFirmwareUpdateRequired: Boolean = false,
     val isDatAppUpdateRequired: Boolean = false,
     val hasActiveDevice: Boolean = false,
+    val hasMockDevice: Boolean = false,
     val canRegister: Boolean = false,
     val isPhoneMode: Boolean = false,
     val isSettingsVisible: Boolean = false,

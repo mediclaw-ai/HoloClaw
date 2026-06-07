@@ -113,7 +113,11 @@ class StreamViewModel(
             onFrameReady = { frame ->
               viewModelScope.launch(Dispatchers.Main) {
                 _uiState.update {
-                  it.copy(videoFrame = frame.bitmap, videoFrameCount = it.videoFrameCount + 1)
+                  it.copy(
+                      videoFrame = frame.bitmap,
+                      hasReceivedFirstFrame = true,
+                      videoFrameCount = it.videoFrameCount + 1,
+                  )
                 }
                 geminiViewModel?.sendVideoFrameIfThrottled(frame.bitmap)
                 webrtcViewModel?.pushVideoFrame(frame.bitmap)
@@ -152,6 +156,7 @@ class StreamViewModel(
       _uiState.update {
         it.copy(
             videoFrame = bitmap,
+            hasReceivedFirstFrame = true,
             videoFrameCount = it.videoFrameCount + 1,
             streamingMode = StreamingMode.PHONE,
             streamState = StreamState.STREAMING,
@@ -212,10 +217,10 @@ class StreamViewModel(
                 }
                 errorJob = viewModelScope.launch {
                   stream?.errorStream?.collect { error ->
-                    if (error == StreamError.STREAM_ERROR) return@collect
+                    if (shouldSuppressStreamError(error)) return@collect
                     stopStream()
                     wearablesViewModel.navigateToDeviceSelection()
-                    wearablesViewModel.setRecentError(error.description)
+                    wearablesViewModel.setRecentError(formatStreamingError(error))
                   }
                 }
                 stream?.start()
@@ -355,6 +360,31 @@ class StreamViewModel(
     wearablesViewModel.setRecentError(error.description)
     stopStream()
     wearablesViewModel.navigateToDeviceSelection()
+  }
+
+  private fun shouldSuppressStreamError(error: StreamError): Boolean {
+    if (error == StreamError.STREAM_ERROR) return true
+    val isStopped = _uiState.value.streamState == StreamState.STOPPED && stream == null
+    return isStopped
+  }
+
+  private fun formatStreamingError(error: StreamError): String {
+    return when (error) {
+      StreamError.HINGE_CLOSED ->
+          "The hinges on the glasses were closed. Please open the hinges and try again."
+      StreamError.THERMAL_HOT, StreamError.THERMAL_EMERGENCY ->
+          "The glasses are too hot to keep streaming. Please let them cool down and try again."
+      StreamError.PEAK_POWER_LIMIT ->
+          "The glasses shut down to protect the battery. Please try again."
+      StreamError.BATTERY_LOW ->
+          "The glasses' battery is too low to stream. Please charge them and try again."
+      StreamError.PERMISSIONS_DENIED ->
+          "Camera permission denied. Please grant permission in Settings."
+      StreamError.TIMEOUT -> "The operation timed out. Please try again."
+      StreamError.CRITICAL_STREAM_ERROR ->
+          "Video streaming failed. Please try again."
+      else -> error.getLocalizedDescription(getApplication())
+    }
   }
 
   private fun shouldTreatSessionEndedAsDatAppUpdateRequired(): Boolean {

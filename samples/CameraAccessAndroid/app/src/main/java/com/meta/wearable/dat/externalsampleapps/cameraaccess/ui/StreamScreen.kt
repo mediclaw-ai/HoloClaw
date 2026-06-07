@@ -103,6 +103,7 @@ fun StreamScreen(
             geminiViewModel.onWidgetsRendered = null
             if (geminiUiState.isGeminiActive) geminiViewModel.stopSession()
             if (webrtcUiState.isActive) webrtcViewModel.stopSession()
+            streamViewModel.stopStream()
         }
     }
 
@@ -131,7 +132,7 @@ fun StreamScreen(
                 eglContext = webrtcViewModel.eglContext,
                 modifier = Modifier.fillMaxSize(),
             )
-        } else if (streamUiState.videoFrame != null) {
+        } else if (streamUiState.videoFrame != null && streamUiState.hasReceivedFirstFrame) {
             key(streamUiState.videoFrameCount) {
                 Image(
                     bitmap = streamUiState.videoFrame!!.asImageBitmap(),
@@ -140,9 +141,10 @@ fun StreamScreen(
                     contentScale = ContentScale.Crop,
                 )
             }
-        }
-
-        if (streamUiState.streamState == StreamState.STARTING) {
+        } else if (
+            streamUiState.streamState == StreamState.STARTING ||
+                (streamUiState.videoFrame == null && streamUiState.streamState != StreamState.STOPPED)
+        ) {
             CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
         }
 
@@ -155,16 +157,23 @@ fun StreamScreen(
                         .padding(top = 70.dp, bottom = 140.dp),
                 verticalArrangement = Arrangement.spacedBy(18.dp),
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    WidgetSectionLabel("SDK · MWDATDisplay (FlexBox)")
+                if (streamUiState.streamingMode == StreamingMode.GLASSES) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        WidgetSectionLabel("SDK · MWDATDisplay (FlexBox)")
+                        DisplayPreviewBoard(
+                            widgets = geminiUiState.widgets,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        WidgetSectionLabel("Compose · native")
+                        WidgetBoardView(
+                            widgets = geminiUiState.widgets,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                } else {
                     DisplayPreviewBoard(
-                        widgets = geminiUiState.widgets,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    WidgetSectionLabel("Compose · native")
-                    WidgetBoardView(
                         widgets = geminiUiState.widgets,
                         modifier = Modifier.fillMaxWidth(),
                     )
