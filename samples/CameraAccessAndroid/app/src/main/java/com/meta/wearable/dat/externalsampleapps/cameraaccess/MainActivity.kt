@@ -34,12 +34,18 @@ import kotlinx.coroutines.sync.withLock
 
 class MainActivity : ComponentActivity() {
   companion object {
-    val PERMISSIONS: Array<String> = arrayOf(
-        BLUETOOTH, BLUETOOTH_CONNECT, INTERNET, RECORD_AUDIO, CAMERA,
-    )
+    val PERMISSIONS: Array<String> =
+        arrayOf(BLUETOOTH, BLUETOOTH_CONNECT, INTERNET, RECORD_AUDIO, CAMERA)
   }
 
   val viewModel: WearablesViewModel by viewModels()
+
+  private val permissionCheckLauncher =
+      registerForActivityResult(RequestMultiplePermissions()) { permissionsResult ->
+        viewModel.onPermissionsResult(permissionsResult) {
+          Wearables.initialize(this)
+        }
+      }
 
   private var permissionContinuation: CancellableContinuation<PermissionStatus>? = null
   private val permissionMutex = Mutex()
@@ -64,20 +70,8 @@ class MainActivity : ComponentActivity() {
     super.onCreate(savedInstanceState)
     enableEdgeToEdge()
 
-    // Initialize settings with app context
     SettingsManager.init(this)
-
-    // Keep screen on while streaming
     window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-
-    // First, ensure the app has necessary Android permissions
-    checkPermissions {
-      // Initialize the DAT SDK once the permissions are granted
-      Wearables.initialize(this)
-
-      // Start observing Wearables state after SDK is initialized
-      viewModel.startMonitoring()
-    }
 
     setContent {
       CameraAccessScaffold(
@@ -87,17 +81,8 @@ class MainActivity : ComponentActivity() {
     }
   }
 
-  fun checkPermissions(onPermissionsGranted: () -> Unit) {
-    registerForActivityResult(RequestMultiplePermissions()) { permissionsResult ->
-          val granted = permissionsResult.entries.all { it.value }
-          if (granted) {
-            onPermissionsGranted()
-          } else {
-            viewModel.setRecentError(
-                "Allow All Permissions (Bluetooth, Bluetooth Connect, Internet, Microphone, Camera)"
-            )
-          }
-        }
-        .launch(PERMISSIONS)
+  override fun onStart() {
+    super.onStart()
+    permissionCheckLauncher.launch(PERMISSIONS)
   }
 }

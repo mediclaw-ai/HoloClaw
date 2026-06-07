@@ -1,12 +1,14 @@
 package com.meta.wearable.dat.externalsampleapps.cameraaccess.gemini
 
 import android.annotation.SuppressLint
+import android.content.Context
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.AudioTrack
 import android.media.MediaRecorder
 import android.util.Log
+import com.meta.wearable.dat.externalsampleapps.cameraaccess.settings.SettingsManager
 import java.io.ByteArrayOutputStream
 
 class AudioManager {
@@ -17,6 +19,9 @@ class AudioManager {
 
     var onAudioCaptured: ((ByteArray) -> Unit)? = null
 
+    private var appContext: Context? = null
+    private var usePhoneMode = false
+
     private var audioRecord: AudioRecord? = null
     private var audioTrack: AudioTrack? = null
     private var captureThread: Thread? = null
@@ -26,8 +31,25 @@ class AudioManager {
     private val accumulateLock = Any()
 
     @SuppressLint("MissingPermission")
+    fun setupAudioSession(context: Context, usePhoneMode: Boolean = false) {
+        this.appContext = context.applicationContext
+        this.usePhoneMode = usePhoneMode
+        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
+        audioManager.mode = android.media.AudioManager.MODE_IN_COMMUNICATION
+        val forceSpeaker = usePhoneMode || SettingsManager.speakerOutputEnabled
+        @Suppress("DEPRECATION")
+        audioManager.isSpeakerphoneOn = forceSpeaker
+        Log.d(TAG, "Audio routing: speaker=${forceSpeaker}, phoneMode=$usePhoneMode")
+    }
+
+    @SuppressLint("MissingPermission")
     fun startCapture() {
         if (isCapturing) return
+
+        val forceSpeaker = usePhoneMode || SettingsManager.speakerOutputEnabled
+        val audioSource =
+            if (forceSpeaker) MediaRecorder.AudioSource.VOICE_COMMUNICATION
+            else MediaRecorder.AudioSource.VOICE_COMMUNICATION
 
         val bufferSize = AudioRecord.getMinBufferSize(
             GeminiConfig.INPUT_AUDIO_SAMPLE_RATE,
@@ -36,7 +58,7 @@ class AudioManager {
         )
 
         audioRecord = AudioRecord(
-            MediaRecorder.AudioSource.VOICE_COMMUNICATION,
+            audioSource,
             GeminiConfig.INPUT_AUDIO_SAMPLE_RATE,
             AudioFormat.CHANNEL_IN_MONO,
             AudioFormat.ENCODING_PCM_16BIT,

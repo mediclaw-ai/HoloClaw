@@ -20,6 +20,7 @@ import SwiftUI
 struct NonStreamView: View {
   @ObservedObject var viewModel: StreamSessionViewModel
   @ObservedObject var wearablesVM: WearablesViewModel
+  @ObservedObject var displayVM: DisplayViewModel
   @State private var sheetHeight: CGFloat = 300
   @State private var showSettings = false
 
@@ -50,14 +51,12 @@ struct NonStreamView: View {
         Spacer()
 
         VStack(spacing: 12) {
-          Image(.cameraAccessIcon)
+          Image(.logo)
             .resizable()
-            .renderingMode(.template)
-            .foregroundColor(.white)
             .aspectRatio(contentMode: .fit)
-            .frame(width: 120)
+            .frame(width: 140)
 
-          Text("Stream Your Glasses Camera")
+          Text("Welcome to HoloClaw")
             .font(.system(size: 20, weight: .semibold))
             .foregroundColor(.white)
 
@@ -123,11 +122,36 @@ struct NonStreamView: View {
             await viewModel.handleStartStreaming()
           }
         }
+
+        // Display capability demo: render "Hello World" on Ray-Ban Display glasses.
+        CustomButton(
+          title: displayVM.isConnecting ? "Connecting to display…" : "Test the Display",
+          style: .secondary,
+          isDisabled: displayVM.isConnecting
+        ) {
+          Task {
+            await displayVM.sendHelloWorld()
+          }
+        }
+
+        if !displayVM.statusMessage.isEmpty {
+          Text(displayVM.statusMessage)
+            .font(.system(size: 12))
+            .multilineTextAlignment(.center)
+            .foregroundColor(.white.opacity(0.6))
+        }
       }
       .padding(.all, 24)
     }
     .sheet(isPresented: $showSettings) {
       SettingsView()
+    }
+    .alert("Display Error", isPresented: $displayVM.showError) {
+      Button("OK") {
+        displayVM.dismissError()
+      }
+    } message: {
+      Text(displayVM.errorMessage)
     }
     .sheet(isPresented: $wearablesVM.showGettingStartedSheet) {
       if #available(iOS 16.0, *) {

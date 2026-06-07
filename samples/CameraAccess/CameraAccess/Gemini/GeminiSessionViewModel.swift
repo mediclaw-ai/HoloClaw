@@ -11,6 +11,11 @@ class GeminiSessionViewModel: ObservableObject {
   @Published var aiTranscript: String = ""
   @Published var toolCallStatus: ToolCallStatus = .idle
   @Published var openClawConnectionState: OpenClawConnectionState = .notConfigured
+  // Widgets to render in the field of view, set from Gemini `render_widgets` calls.
+  @Published var widgets: [WidgetSpec] = []
+  // Notifies the host when Gemini renders widgets, so it can also push them to the
+  // glasses Display (SDK) during streaming.
+  var onWidgetsRendered: (([WidgetSpec]) -> Void)?
   private let geminiService = GeminiLiveService()
   private let openClawBridge = OpenClawBridge()
   private var toolCallRouter: ToolCallRouter?
@@ -95,8 +100,19 @@ class GeminiSessionViewModel: ObservableObject {
       guard let self else { return }
       Task { @MainActor in
         for call in toolCall.functionCalls {
-          self.toolCallRouter?.handleToolCall(call) { [weak self] response in
-            self?.geminiService.sendToolResponse(response)
+          // `execute` decides the action: render widgets in the UI, or delegate a
+          // real-world task to OpenClaw.
+          let action = (call.args["action"] as? String)?.lowercased()
+          let hasWidgets = ((call.args["widgets"] as? [[String: Any]])?.isEmpty == false)
+          if action == "render" || hasWidgets {
+            self.handleRenderWidgets(call)
+          } else {
+            let task = call.args["task"] as? String
+            self.toolCallRouter?.handleToolCall(call) { [weak self] response in
+              guard let self else { return }
+              self.geminiService.sendToolResponse(response)
+              self.maybeRenderResultLink(task: task, response: response)
+            }
           }
         }
       }
@@ -190,6 +206,74 @@ class GeminiSessionViewModel: ObservableObject {
     userTranscript = ""
     aiTranscript = ""
     toolCallStatus = .idle
+    widgets = []
+  }
+
+  /// Handles the Gemini `render_widgets` tool call: decodes the widgets, shows them
+  /// in the field of view, and acknowledges the call.
+  private func handleRenderWidgets(_ call: GeminiFunctionCall) {
+    let specs = WidgetSpec.list(from: call.args)
+    widgets = specs
+    onWidgetsRendered?(specs)
+    NSLog("[Widgets] render_widgets -> %d widget(s)", specs.count)
+    let response: [String: Any] = [
+      "toolResponse": [
+        "functionResponses": [
+          [
+            "id": call.id,
+            "name": call.name,
+            "response": ["result": "Displayed \(specs.count) widget(s) in the field of view."],
+          ]
+        ]
+      ]
+    ]
+    geminiService.sendToolResponse(response)
+  }
+
+  /// If a delegated music/vibe task returns a public URL (e.g. an Eleven Labs
+  /// track), show that URL as a text widget — on the phone and the glasses.
+  private func maybeRenderResultLink(task: String?, response: [String: Any]) {
+    guard let result = Self.resultString(from: response),
+          let url = Self.firstURL(in: result) else { return }
+    let taskLower = (task ?? "").lowercased()
+    let urlLower = url.lowercased()
+
+    let isImage = taskLower.contains("image") || taskLower.contains("picture")
+      || taskLower.contains("photo")
+      || ["png", "jpg", "jpeg", "webp", "gif", "heic"].contains { urlLower.contains(".\($0)") }
+    let isMusic = taskLower.contains("eleven") || taskLower.contains("music")
+      || taskLower.contains("vibe")
+      || ["mp3", "wav", "m4a", "aac", "ogg", "flac"].contains { urlLower.contains(".\($0)") }
+
+    let widget: WidgetSpec
+    if isImage {
+      widget = WidgetSpec(kind: .image(url: url, caption: "Generated image"))
+    } else if isMusic {
+      widget = WidgetSpec(kind: .music(url: url, title: "Your vibe track 🎵"))
+    } else {
+      return
+    }
+    widgets = [widget]
+    onWidgetsRendered?([widget])
+    if isMusic {
+      // Start playback right away — audio routes to the glasses over Bluetooth.
+      MusicPlayer.shared.play(url: url)
+    }
+    NSLog("[Widgets] auto-rendered %@ link: %@", isImage ? "image" : "music", url)
+  }
+
+  private static func resultString(from response: [String: Any]) -> String? {
+    guard let toolResponse = response["toolResponse"] as? [String: Any],
+          let functionResponses = toolResponse["functionResponses"] as? [[String: Any]],
+          let resp = functionResponses.first?["response"] as? [String: Any] else { return nil }
+    return (resp["result"] as? String) ?? (resp["error"] as? String)
+  }
+
+  private static func firstURL(in text: String) -> String? {
+    guard let detector = try? NSDataDetector(
+      types: NSTextCheckingResult.CheckingType.link.rawValue) else { return nil }
+    let range = NSRange(text.startIndex..., in: text)
+    return detector.firstMatch(in: text, options: [], range: range)?.url?.absoluteString
   }
 
   func sendVideoFrameIfThrottled(image: UIImage) {

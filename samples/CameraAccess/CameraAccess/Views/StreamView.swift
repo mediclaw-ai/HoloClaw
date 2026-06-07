@@ -51,6 +51,38 @@ struct StreamView: View {
           .foregroundColor(.white)
       }
 
+      // Dynamic widgets from Gemini (execute with action="render"), rendered in the
+      // field of view via BOTH paths from the same data: the SDK (MWDATDisplay
+      // FlexBox, interpreted by DisplayDSLView) and native SwiftUI (WidgetBoardView).
+      // The board starts empty and fills in live as Gemini renders widgets.
+      if !geminiVM.widgets.isEmpty {
+        ScrollView {
+          VStack(spacing: 18) {
+            if viewModel.streamingMode == .glasses {
+              // Start streaming: keep both renderings on the phone (the SDK widgets
+              // also render on the glasses Display).
+              VStack(spacing: 8) {
+                widgetLabel("SDK · MWDATDisplay (FlexBox)")
+                DisplayDSLView(flexBox: DisplayWidgets.board(for: geminiVM.widgets))
+              }
+              VStack(spacing: 8) {
+                widgetLabel("SwiftUI · native")
+                WidgetBoardView(widgets: geminiVM.widgets)
+              }
+            } else {
+              // Start on iPhone: render each widget once (the SDK display rendering).
+              DisplayDSLView(flexBox: DisplayWidgets.board(for: geminiVM.widgets))
+            }
+          }
+          .frame(maxWidth: 360)
+          .frame(maxWidth: .infinity)
+          .padding(.horizontal, 20)
+          .padding(.top, 70)
+          .padding(.bottom, 140)
+        }
+        .scrollIndicators(.hidden)
+      }
+
       // Gemini status overlay (top) + speaking indicator
       if geminiVM.isGeminiActive {
         VStack {
@@ -143,6 +175,13 @@ struct StreamView: View {
     } message: {
       Text(webrtcVM.errorMessage ?? "")
     }
+  }
+
+  private func widgetLabel(_ text: String) -> some View {
+    Text(text)
+      .font(.system(size: 11, weight: .semibold))
+      .foregroundColor(.white.opacity(0.7))
+      .frame(maxWidth: .infinity, alignment: .leading)
   }
 }
 

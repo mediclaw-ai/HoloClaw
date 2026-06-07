@@ -19,6 +19,7 @@ struct StreamSessionView: View {
   let wearables: WearablesInterface
   @ObservedObject private var wearablesViewModel: WearablesViewModel
   @StateObject private var viewModel: StreamSessionViewModel
+  @StateObject private var displayVM: DisplayViewModel
   @StateObject private var geminiVM = GeminiSessionViewModel()
   @StateObject private var webrtcVM = WebRTCSessionViewModel()
 
@@ -26,6 +27,7 @@ struct StreamSessionView: View {
     self.wearables = wearables
     self.wearablesViewModel = wearablesVM
     self._viewModel = StateObject(wrappedValue: StreamSessionViewModel(wearables: wearables))
+    self._displayVM = StateObject(wrappedValue: DisplayViewModel(wearables: wearables))
   }
 
   var body: some View {
@@ -35,13 +37,18 @@ struct StreamSessionView: View {
         StreamView(viewModel: viewModel, wearablesVM: wearablesViewModel, geminiVM: geminiVM, webrtcVM: webrtcVM)
       } else {
         // Pre-streaming setup view with permissions and start button
-        NonStreamView(viewModel: viewModel, wearablesVM: wearablesViewModel)
+        NonStreamView(viewModel: viewModel, wearablesVM: wearablesViewModel, displayVM: displayVM)
       }
     }
     .task {
       viewModel.geminiSessionVM = geminiVM
       viewModel.webrtcSessionVM = webrtcVM
       geminiVM.streamingMode = viewModel.streamingMode
+      // While streaming from glasses, also push Gemini's widgets to the glasses
+      // Display (SDK), the same way "Hello World on Display" does.
+      geminiVM.onWidgetsRendered = { [weak viewModel] specs in
+        Task { @MainActor in await viewModel?.sendWidgetsToGlasses(specs) }
+      }
     }
     .onChange(of: viewModel.streamingMode) { newMode in
       geminiVM.streamingMode = newMode

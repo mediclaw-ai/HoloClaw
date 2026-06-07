@@ -51,6 +51,7 @@ fun SettingsScreen(
     var webrtcSignalingURL by remember { mutableStateOf(SettingsManager.webrtcSignalingURL) }
     var videoStreamingEnabled by remember { mutableStateOf(SettingsManager.videoStreamingEnabled) }
     var proactiveNotificationsEnabled by remember { mutableStateOf(SettingsManager.proactiveNotificationsEnabled) }
+    var speakerOutputEnabled by remember { mutableStateOf(SettingsManager.speakerOutputEnabled) }
     var showResetDialog by remember { mutableStateOf(false) }
 
     fun save() {
@@ -63,6 +64,7 @@ fun SettingsScreen(
         SettingsManager.webrtcSignalingURL = webrtcSignalingURL.trim()
         SettingsManager.videoStreamingEnabled = videoStreamingEnabled
         SettingsManager.proactiveNotificationsEnabled = proactiveNotificationsEnabled
+        SettingsManager.speakerOutputEnabled = speakerOutputEnabled
     }
 
     fun reload() {
@@ -75,6 +77,7 @@ fun SettingsScreen(
         webrtcSignalingURL = SettingsManager.webrtcSignalingURL
         videoStreamingEnabled = SettingsManager.videoStreamingEnabled
         proactiveNotificationsEnabled = SettingsManager.proactiveNotificationsEnabled
+        speakerOutputEnabled = SettingsManager.speakerOutputEnabled
     }
 
     Column(modifier = modifier.fillMaxSize()) {
@@ -173,6 +176,27 @@ fun SettingsScreen(
                 Switch(
                     checked = videoStreamingEnabled,
                     onCheckedChange = { videoStreamingEnabled = it },
+                )
+            }
+
+            // Audio
+            SectionHeader("Audio")
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            ) {
+                Column {
+                    Text("Speaker Output", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        "Route audio to the phone speaker instead of glasses. Useful for demos.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(
+                    checked = speakerOutputEnabled,
+                    onCheckedChange = { speakerOutputEnabled = it },
                 )
             }
 

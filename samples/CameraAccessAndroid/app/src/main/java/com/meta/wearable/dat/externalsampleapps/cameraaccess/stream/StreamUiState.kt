@@ -6,20 +6,21 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-// StreamUiState - DAT Camera Streaming UI State
-//
-// This data class manages UI state for camera streaming operations using the DAT API.
-
 package com.meta.wearable.dat.externalsampleapps.cameraaccess.stream
 
 import android.graphics.Bitmap
-import com.meta.wearable.dat.camera.types.StreamSessionState
+import com.meta.wearable.dat.camera.types.StreamState
 
-enum class StreamingMode { GLASSES, PHONE }
+enum class StreamingMode {
+  GLASSES,
+  PHONE,
+}
 
 data class StreamUiState(
-    val streamSessionState: StreamSessionState = StreamSessionState.STOPPED,
+    val streamState: StreamState = StreamState.STOPPED,
     val videoFrame: Bitmap? = null,
+    val hasReceivedFirstFrame: Boolean = false,
+    val videoFrameCount: Int = 0,
     val capturedPhoto: Bitmap? = null,
     val isShareDialogVisible: Boolean = false,
     val isCapturing: Boolean = false,

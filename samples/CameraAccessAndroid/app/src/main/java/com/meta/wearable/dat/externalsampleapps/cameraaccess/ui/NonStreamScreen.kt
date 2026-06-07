@@ -52,10 +52,21 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import com.meta.wearable.dat.camera.types.VideoQuality
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.meta.wearable.dat.externalsampleapps.cameraaccess.display.DisplayViewModel
 import com.meta.wearable.dat.core.types.Permission
 import com.meta.wearable.dat.core.types.PermissionStatus
 import com.meta.wearable.dat.core.types.RegistrationState
@@ -69,12 +80,15 @@ fun NonStreamScreen(
     viewModel: WearablesViewModel,
     onRequestWearablesPermission: suspend (Permission) -> PermissionStatus,
     modifier: Modifier = Modifier,
+    displayViewModel: DisplayViewModel = viewModel(),
 ) {
   val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+  val displayUiState by displayViewModel.uiState.collectAsStateWithLifecycle()
   val gettingStartedSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
   val scope = rememberCoroutineScope()
   var dropdownExpanded by remember { mutableStateOf(false) }
-  val isDisconnectEnabled = uiState.registrationState is RegistrationState.Registered
+  val isDisconnectEnabled = uiState.registrationState == RegistrationState.REGISTERED
+  val isUpdateRequired = uiState.isFirmwareUpdateRequired || uiState.isDatAppUpdateRequired
   val activity = LocalActivity.current
   val context = LocalContext.current
 
@@ -180,18 +194,92 @@ fun NonStreamScreen(
           }
         }
 
-        // Start Streaming Button (glasses)
-        SwitchButton(
-            label = stringResource(R.string.stream_button_title),
-            onClick = { viewModel.navigateToStreaming(onRequestWearablesPermission) },
-            enabled = uiState.hasActiveDevice,
-        )
+        if (isUpdateRequired) {
+          UpdateRequiredMessage(
+              showFirmwareUpdate = uiState.isFirmwareUpdateRequired,
+              showDatAppUpdate = uiState.isDatAppUpdateRequired,
+          )
+        }
 
-        // Start on Phone Button
+        if (uiState.isFirmwareUpdateRequired) {
+          SwitchButton(
+              label = stringResource(R.string.update_firmware_button_title),
+              onClick = {
+                activity?.let { viewModel.openFirmwareUpdate(it) }
+                    ?: Toast.makeText(context, "Activity not available", Toast.LENGTH_SHORT).show()
+              },
+          )
+        }
+
+        if (uiState.isDatAppUpdateRequired) {
+          SwitchButton(
+              label = stringResource(R.string.update_dat_app_button_title),
+              onClick = {
+                activity?.let { viewModel.openDATGlassesAppUpdate(it) }
+                    ?: Toast.makeText(context, "Activity not available", Toast.LENGTH_SHORT).show()
+              },
+          )
+        }
+
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier.padding(bottom = 4.dp),
+        ) {
+          Text(
+              text = "Resolution",
+              style = MaterialTheme.typography.bodySmall,
+              color = Color.White.copy(alpha = 0.6f),
+          )
+          Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ResolutionChip("Low", VideoQuality.LOW, uiState.selectedVideoQuality) {
+              viewModel.updateVideoQuality(VideoQuality.LOW)
+            }
+            ResolutionChip("Med", VideoQuality.MEDIUM, uiState.selectedVideoQuality) {
+              viewModel.updateVideoQuality(VideoQuality.MEDIUM)
+            }
+            ResolutionChip("High", VideoQuality.HIGH, uiState.selectedVideoQuality) {
+              viewModel.updateVideoQuality(VideoQuality.HIGH)
+            }
+          }
+          Text(
+              text = uiState.resolutionLabel,
+              style = MaterialTheme.typography.bodySmall,
+              fontFamily = FontFamily.Monospace,
+              color = Color.White.copy(alpha = 0.4f),
+          )
+        }
+
         SwitchButton(
             label = "Start on Phone",
             onClick = { viewModel.navigateToPhoneMode() },
         )
+
+        SwitchButton(
+            label = stringResource(R.string.stream_button_title),
+            onClick = { viewModel.navigateToStreaming(onRequestWearablesPermission) },
+            enabled = uiState.hasActiveDevice && !isUpdateRequired,
+        )
+
+        SwitchButton(
+            label =
+                if (displayUiState.isConnecting) {
+                    stringResource(R.string.display_connecting_button_title)
+                } else {
+                    stringResource(R.string.display_hello_world_button_title)
+                },
+            onClick = { displayViewModel.sendHelloWorld() },
+            enabled = !displayUiState.isConnecting,
+        )
+
+        if (displayUiState.statusMessage.isNotEmpty()) {
+          Text(
+              text = displayUiState.statusMessage,
+              style = MaterialTheme.typography.bodySmall,
+              textAlign = TextAlign.Center,
+              color = Color.White.copy(alpha = 0.6f),
+          )
+        }
       }
 
       // Getting Started Sheet
@@ -211,6 +299,19 @@ fun NonStreamScreen(
         }
       }
     }
+  }
+
+  if (displayUiState.showError) {
+    AlertDialog(
+        onDismissRequest = { displayViewModel.dismissError() },
+        title = { Text(stringResource(R.string.display_error_title)) },
+        text = { Text(displayUiState.errorMessage) },
+        confirmButton = {
+          TextButton(onClick = { displayViewModel.dismissError() }) {
+            Text(stringResource(R.string.ok))
+          }
+        },
+    )
   }
 }
 
@@ -264,5 +365,65 @@ private fun TipItem(iconResId: Int, text: String, modifier: Modifier = Modifier)
     )
     Spacer(modifier = Modifier.width(10.dp))
     Text(text = text)
+  }
+}
+
+@Composable
+private fun ResolutionChip(
+    label: String,
+    quality: VideoQuality,
+    selectedQuality: VideoQuality,
+    onClick: () -> Unit,
+) {
+  FilterChip(
+      selected = selectedQuality == quality,
+      onClick = onClick,
+      label = { Text(label) },
+      colors =
+          FilterChipDefaults.filterChipColors(
+              selectedContainerColor = AppColor.DeepBlue,
+              selectedLabelColor = Color.White,
+              containerColor = Color.White.copy(alpha = 0.1f),
+              labelColor = Color.White,
+          ),
+  )
+}
+
+@Composable
+private fun UpdateRequiredMessage(
+    showFirmwareUpdate: Boolean,
+    showDatAppUpdate: Boolean,
+) {
+  val message =
+      when {
+        showFirmwareUpdate && showDatAppUpdate ->
+            stringResource(R.string.update_required_both_message)
+        showFirmwareUpdate -> stringResource(R.string.update_required_firmware_message)
+        else -> stringResource(R.string.update_required_dat_app_message)
+      }
+
+  Row(
+      modifier =
+          Modifier.fillMaxWidth()
+              .clip(RoundedCornerShape(12.dp))
+              .background(Color(0xFFFFF4D6))
+              .padding(12.dp),
+      horizontalArrangement = Arrangement.spacedBy(8.dp),
+      verticalAlignment = Alignment.Top,
+  ) {
+    Icon(
+        imageVector = Icons.Default.Warning,
+        contentDescription = null,
+        tint = Color(0xFF8A4B00),
+        modifier = Modifier.size(20.dp),
+    )
+    Column {
+      Text(
+          text = stringResource(R.string.update_required_title),
+          fontWeight = FontWeight.SemiBold,
+          color = Color(0xFF8A4B00),
+      )
+      Text(text = message, color = Color(0xFF8A4B00))
+    }
   }
 }

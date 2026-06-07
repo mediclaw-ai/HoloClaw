@@ -66,6 +66,7 @@ dependencies {
   implementation(libs.mwdat.core)
   implementation(libs.mwdat.camera)
   implementation(libs.mwdat.mockdevice)
+  implementation(libs.mwdat.display)
   // VisionClaw additions
   implementation(libs.okhttp)
   implementation(libs.webrtc)

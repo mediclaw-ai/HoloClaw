@@ -1,0 +1,200 @@
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * All rights reserved.
+ *
+ * This source code is licensed under the license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+package com.meta.wearable.dat.externalsampleapps.cameraaccess.display
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PauseCircle
+import androidx.compose.material.icons.filled.PlayCircle
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+
+@Composable
+fun WidgetBoardView(
+    widgets: List<WidgetSpec>,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier, verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp)) {
+        for (widget in widgets) {
+            WidgetCard(widget = widget)
+        }
+    }
+}
+
+@Composable
+private fun WidgetCard(widget: WidgetSpec) {
+    when (val kind = widget.kind) {
+        is WidgetSpec.Kind.Text -> TextWidgetCard(title = kind.title, bodyText = kind.body)
+        is WidgetSpec.Kind.Image ->
+            ImageWidgetCard(
+                imageUrl = kind.url,
+                caption = kind.caption?.takeIf { it.isNotEmpty() } ?: "Image",
+            )
+        is WidgetSpec.Kind.Table ->
+            TableWidgetCard(title = kind.title, columns = kind.columns, rows = kind.rows)
+        is WidgetSpec.Kind.Music ->
+            MusicPlayerWidget(url = kind.url, title = kind.title ?: "Track")
+    }
+}
+
+@Composable
+private fun TextWidgetCard(title: String?, bodyText: String) {
+    Column(
+        modifier = Modifier.fillMaxWidth().displayCardStyle().padding(18.dp),
+    ) {
+        if (!title.isNullOrEmpty()) {
+            Text(
+                text = title,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+            )
+        }
+        if (bodyText.isNotEmpty()) {
+            Text(
+                text = bodyText,
+                fontSize = 15.sp,
+                color = Color.White.copy(alpha = 0.85f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun ImageWidgetCard(imageUrl: String, caption: String) {
+    Column(
+        modifier = Modifier.fillMaxWidth().displayCardStyle().padding(16.dp),
+    ) {
+        RemoteImage(
+            url = imageUrl,
+            modifier =
+                Modifier.fillMaxWidth()
+                    .height(150.dp)
+                    .clip(RoundedCornerShape(14.dp)),
+        )
+        Text(
+            text = caption,
+            fontSize = 13.sp,
+            color = Color.White.copy(alpha = 0.6f),
+            modifier = Modifier.padding(top = 8.dp),
+        )
+    }
+}
+
+@Composable
+private fun MusicPlayerWidget(url: String, title: String) {
+    val isPlaying by MusicPlayer.isPlaying.collectAsStateWithLifecycle()
+    val currentUrl by MusicPlayer.currentUrl.collectAsStateWithLifecycle()
+    val playingThis = isPlaying && currentUrl == url
+
+    Row(
+        modifier = Modifier.fillMaxWidth().displayCardStyle().padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IconButton(onClick = { MusicPlayer.toggle(url) }) {
+            Icon(
+                imageVector = if (playingThis) Icons.Filled.PauseCircle else Icons.Filled.PlayCircle,
+                contentDescription = if (playingThis) "Pause" else "Play",
+                tint = Color.White,
+                modifier = Modifier.height(44.dp).width(44.dp),
+            )
+        }
+        Column(modifier = Modifier.padding(start = 4.dp)) {
+            Text(
+                text = title,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Color.White,
+            )
+            Text(
+                text = if (playingThis) "Playing on your glasses…" else "Tap to play",
+                fontSize = 12.sp,
+                color = Color.White.copy(alpha = 0.6f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun TableWidgetCard(
+    title: String?,
+    columns: List<String>?,
+    rows: List<List<String>>,
+) {
+    val columnCount = maxOf(columns?.size ?: 0, rows.maxOfOrNull { it.size } ?: 0)
+
+    Column(
+        modifier = Modifier.fillMaxWidth().displayCardStyle().padding(20.dp),
+    ) {
+        if (!title.isNullOrEmpty()) {
+            Text(
+                text = title,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+            )
+        }
+        if (!columns.isNullOrEmpty()) {
+            TableRow(cells = columns, columnCount = columnCount, isHeader = true)
+        }
+        for (row in rows) {
+            TableRow(cells = row, columnCount = columnCount, isHeader = false)
+        }
+    }
+}
+
+@Composable
+private fun TableRow(cells: List<String>, columnCount: Int, isHeader: Boolean) {
+    Row(modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
+        for (i in 0 until maxOf(columnCount, 1)) {
+            Text(
+                text = cells.getOrNull(i).orEmpty(),
+                modifier = Modifier.weight(1f),
+                fontSize = if (isHeader) 12.sp else 15.sp,
+                color = if (isHeader) Color.White.copy(alpha = 0.6f) else Color.White,
+            )
+        }
+    }
+}
+
+@Composable
+fun DisplayPreviewBoard(
+    widgets: List<WidgetSpec>,
+    modifier: Modifier = Modifier,
+) {
+    // Android SDK display content is builder-only; mirror the on-glasses layout natively.
+    WidgetBoardView(widgets = widgets, modifier = modifier)
+}
+
+@Composable
+private fun Modifier.displayCardStyle(): Modifier {
+    val shape = RoundedCornerShape(18.dp)
+    return clip(shape)
+        .background(Color.Black.copy(alpha = 0.55f), shape)
+        .border(1.dp, Color.White.copy(alpha = 0.12f), shape)
+}
