@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/elevenlabs.jpeg" alt="HoloClaw logo" width="400">
+  <img src="assets/elevenlabs.jpeg" alt="HoloClaw logo" width="500">
 </p>
 
 # HoloClaw
