@@ -12,6 +12,14 @@ Built on the [Meta Wearables DAT SDK](https://wearables.developer.meta.com/) (iO
 
 > This repository extends the open-source [Intent-Lab/HoloClaw](https://github.com/Intent-Lab/HoloClaw) sample apps with on-demand widgets and image generation, glasses-side rendering, and Android/iOS parity updates.
 
+## Demos:
+
+[https://youtu.be/2u2osULRmvc](https://youtu.be/2u2osULRmvc)
+
+[https://youtu.be/cE5O5y4j23I](https://youtu.be/cE5O5y4j23I)
+
+[https://youtu.be/aD7KyfbIgvc](https://youtu.be/aD7KyfbIgvc)
+
 ---
 
 ## Overview
