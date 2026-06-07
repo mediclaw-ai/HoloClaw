@@ -34,7 +34,13 @@ import com.meta.wearable.dat.core.selectors.DeviceSelector
 import com.meta.wearable.dat.core.session.DeviceSession
 import com.meta.wearable.dat.core.session.DeviceSessionState
 import com.meta.wearable.dat.core.types.DeviceSessionError
+import com.meta.wearable.dat.display.Display
+import com.meta.wearable.dat.display.addDisplay
+import com.meta.wearable.dat.display.types.DisplayConfiguration
+import com.meta.wearable.dat.display.types.DisplayState
 import com.meta.wearable.dat.externalsampleapps.cameraaccess.R
+import com.meta.wearable.dat.externalsampleapps.cameraaccess.display.DisplayWidgets.board
+import com.meta.wearable.dat.externalsampleapps.cameraaccess.display.WidgetSpec
 import com.meta.wearable.dat.externalsampleapps.cameraaccess.gemini.GeminiSessionViewModel
 import com.meta.wearable.dat.externalsampleapps.cameraaccess.phone.PhoneCameraManager
 import com.meta.wearable.dat.externalsampleapps.cameraaccess.wearables.WearablesViewModel
@@ -79,6 +85,9 @@ class StreamViewModel(
 
   private var presentationQueue: PresentationQueue? = null
   private var phoneCameraManager: PhoneCameraManager? = null
+  private var glassesDisplay: Display? = null
+  private var glassesDisplayStateJob: Job? = null
+  private var pendingGlassesSpecs: List<WidgetSpec>? = null
 
   var geminiViewModel: GeminiSessionViewModel? = null
   var webrtcViewModel: WebRTCSessionViewModel? = null
@@ -216,9 +225,77 @@ class StreamViewModel(
               }
         } else if (currentState == DeviceSessionState.PAUSED) {
           Log.d(TAG, "Session paused (tap gesture) — keeping stream alive for resume")
+        } else if (currentState == DeviceSessionState.STOPPED) {
+          teardownGlassesDisplay()
         }
       }
     }
+  }
+
+  /// Renders widgets on the glasses Display by attaching to the active streaming
+  /// DeviceSession — the same mechanism as "Hello World on Display". No-op in phone mode.
+  fun sendWidgetsToGlasses(specs: List<WidgetSpec>) {
+    if (specs.isEmpty()) return
+    viewModelScope.launch {
+      if (_uiState.value.streamingMode != StreamingMode.GLASSES) return@launch
+      val activeSession = session ?: return@launch
+      if (activeSession.state.value != DeviceSessionState.STARTED) return@launch
+
+      val activeDisplay = glassesDisplay
+      if (activeDisplay != null && activeDisplay.state.value == DisplayState.STARTED) {
+        sendBoardToDisplay(activeDisplay, specs)
+        return@launch
+      }
+
+      pendingGlassesSpecs = specs
+      if (glassesDisplay != null) return@launch
+
+      activeSession.addDisplay(DisplayConfiguration())
+          .onSuccess { display ->
+            glassesDisplay = display
+            glassesDisplayStateJob = viewModelScope.launch {
+              display.state.collect { state ->
+                when (state) {
+                  DisplayState.STARTED -> {
+                    pendingGlassesSpecs?.let { pending ->
+                      pendingGlassesSpecs = null
+                      sendBoardToDisplay(display, pending)
+                    }
+                  }
+                  DisplayState.STOPPED, DisplayState.CLOSED -> {
+                    glassesDisplayStateJob?.cancel()
+                    glassesDisplayStateJob = null
+                    glassesDisplay = null
+                  }
+                  else -> Unit
+                }
+              }
+            }
+          }
+          .onFailure { error, _ ->
+            Log.w(TAG, "addDisplay on streaming session failed: ${error.description}")
+            glassesDisplay = null
+            pendingGlassesSpecs = null
+          }
+    }
+  }
+
+  private suspend fun sendBoardToDisplay(display: Display, specs: List<WidgetSpec>) {
+    display.sendContent { board(specs) }.fold(
+        onSuccess = { Log.d(TAG, "Sent ${specs.size} widget(s) to glasses display") },
+        onFailure = { error, _ ->
+          Log.w(TAG, "Send to glasses display failed: ${error.description}")
+        },
+    )
+  }
+
+  private fun teardownGlassesDisplay() {
+    glassesDisplayStateJob?.cancel()
+    glassesDisplayStateJob = null
+    pendingGlassesSpecs = null
+    val activeDisplay = glassesDisplay
+    glassesDisplay = null
+    activeDisplay?.stop()
   }
 
   fun stopStream() {
@@ -239,6 +316,7 @@ class StreamViewModel(
     sessionStateJob = null
     presentationQueue?.stop()
     presentationQueue = null
+    teardownGlassesDisplay()
     _uiState.update { INITIAL_STATE }
     stream?.stop()
     stream = null

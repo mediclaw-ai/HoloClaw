@@ -62,7 +62,11 @@ import androidx.compose.ui.text.font.FontWeight
 import com.meta.wearable.dat.camera.types.VideoQuality
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.meta.wearable.dat.externalsampleapps.cameraaccess.display.DisplayViewModel
 import com.meta.wearable.dat.core.types.Permission
 import com.meta.wearable.dat.core.types.PermissionStatus
 import com.meta.wearable.dat.core.types.RegistrationState
@@ -76,8 +80,10 @@ fun NonStreamScreen(
     viewModel: WearablesViewModel,
     onRequestWearablesPermission: suspend (Permission) -> PermissionStatus,
     modifier: Modifier = Modifier,
+    displayViewModel: DisplayViewModel = viewModel(),
 ) {
   val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+  val displayUiState by displayViewModel.uiState.collectAsStateWithLifecycle()
   val gettingStartedSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
   val scope = rememberCoroutineScope()
   var dropdownExpanded by remember { mutableStateOf(false) }
@@ -254,6 +260,26 @@ fun NonStreamScreen(
             onClick = { viewModel.navigateToStreaming(onRequestWearablesPermission) },
             enabled = uiState.hasActiveDevice && !isUpdateRequired,
         )
+
+        SwitchButton(
+            label =
+                if (displayUiState.isConnecting) {
+                    stringResource(R.string.display_connecting_button_title)
+                } else {
+                    stringResource(R.string.display_hello_world_button_title)
+                },
+            onClick = { displayViewModel.sendHelloWorld() },
+            enabled = !displayUiState.isConnecting,
+        )
+
+        if (displayUiState.statusMessage.isNotEmpty()) {
+          Text(
+              text = displayUiState.statusMessage,
+              style = MaterialTheme.typography.bodySmall,
+              textAlign = TextAlign.Center,
+              color = Color.White.copy(alpha = 0.6f),
+          )
+        }
       }
 
       // Getting Started Sheet
@@ -273,6 +299,19 @@ fun NonStreamScreen(
         }
       }
     }
+  }
+
+  if (displayUiState.showError) {
+    AlertDialog(
+        onDismissRequest = { displayViewModel.dismissError() },
+        title = { Text(stringResource(R.string.display_error_title)) },
+        text = { Text(displayUiState.errorMessage) },
+        confirmButton = {
+          TextButton(onClick = { displayViewModel.dismissError() }) {
+            Text(stringResource(R.string.ok))
+          }
+        },
+    )
   }
 }
 

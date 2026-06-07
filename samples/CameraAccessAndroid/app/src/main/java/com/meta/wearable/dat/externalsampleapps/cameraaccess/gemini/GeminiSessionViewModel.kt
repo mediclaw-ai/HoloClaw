@@ -5,6 +5,8 @@ import android.graphics.Bitmap
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.meta.wearable.dat.externalsampleapps.cameraaccess.display.WidgetSpec
+import com.meta.wearable.dat.externalsampleapps.cameraaccess.openclaw.GeminiFunctionCall
 import com.meta.wearable.dat.externalsampleapps.cameraaccess.openclaw.OpenClawBridge
 import com.meta.wearable.dat.externalsampleapps.cameraaccess.openclaw.OpenClawEventClient
 import com.meta.wearable.dat.externalsampleapps.cameraaccess.settings.SettingsManager
@@ -29,12 +31,17 @@ data class GeminiUiState(
     val aiTranscript: String = "",
     val toolCallStatus: ToolCallStatus = ToolCallStatus.Idle,
     val openClawConnectionState: OpenClawConnectionState = OpenClawConnectionState.NotConfigured,
+    val widgets: List<WidgetSpec> = emptyList(),
 )
 
 class GeminiSessionViewModel : ViewModel() {
     companion object {
         private const val TAG = "GeminiSessionVM"
     }
+
+    /// Notifies the host when Gemini renders widgets so they can also be pushed to the
+    /// glasses Display (SDK) during streaming.
+    var onWidgetsRendered: ((List<WidgetSpec>) -> Unit)? = null
 
     private val _uiState = MutableStateFlow(GeminiUiState())
     val uiState: StateFlow<GeminiUiState> = _uiState.asStateFlow()
@@ -113,8 +120,20 @@ class GeminiSessionViewModel : ViewModel() {
 
             geminiService.onToolCall = { toolCall ->
                 for (call in toolCall.functionCalls) {
-                    toolCallRouter?.handleToolCall(call) { response ->
-                        geminiService.sendToolResponse(response)
+                    val action = call.args["action"]?.toString()?.lowercase()
+                    val widgetsArg = call.args["widgets"]
+                    val hasWidgets =
+                        when (widgetsArg) {
+                            is org.json.JSONArray -> widgetsArg.length() > 0
+                            is List<*> -> widgetsArg.isNotEmpty()
+                            else -> false
+                        }
+                    if (action == "render" || hasWidgets) {
+                        handleRenderWidgets(call)
+                    } else {
+                        toolCallRouter?.handleToolCall(call) { response ->
+                            geminiService.sendToolResponse(response)
+                        }
                     }
                 }
             }
@@ -206,6 +225,40 @@ class GeminiSessionViewModel : ViewModel() {
 
     fun clearError() {
         _uiState.value = _uiState.value.copy(errorMessage = null)
+    }
+
+    private fun handleRenderWidgets(call: GeminiFunctionCall) {
+        val specs = WidgetSpec.listFrom(call.args)
+        Log.d(TAG, "render_widgets -> ${specs.size} widget(s)")
+        _uiState.value = _uiState.value.copy(widgets = specs)
+        onWidgetsRendered?.invoke(specs)
+        val response =
+            org.json.JSONObject().apply {
+                put(
+                    "toolResponse",
+                    org.json.JSONObject().apply {
+                        put(
+                            "functionResponses",
+                            org.json.JSONArray().put(
+                                org.json.JSONObject().apply {
+                                    put("id", call.id)
+                                    put("name", call.name)
+                                    put(
+                                        "response",
+                                        org.json.JSONObject().apply {
+                                            put(
+                                                "result",
+                                                "Displayed ${specs.size} widget(s) in the field of view.",
+                                            )
+                                        },
+                                    )
+                                },
+                            ),
+                        )
+                    },
+                )
+            }
+        geminiService.sendToolResponse(response)
     }
 
     override fun onCleared() {

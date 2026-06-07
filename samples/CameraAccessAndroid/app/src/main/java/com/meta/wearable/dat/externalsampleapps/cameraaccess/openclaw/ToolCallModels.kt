@@ -109,18 +109,95 @@ object ToolDeclarations {
     private fun executeJSON(): JSONObject {
         return JSONObject().apply {
             put("name", "execute")
-            put("description", "Your only way to take action. You have no memory, storage, or ability to do anything on your own -- use this tool for everything: sending messages, searching the web, adding to lists, setting reminders, creating notes, research, drafts, scheduling, smart home control, app interactions, or any request that goes beyond answering a question. When in doubt, use this tool.")
+            put(
+                "description",
+                "Your single tool for taking any action. First DECIDE the kind of action and set \"action\":\n" +
+                    "• action=\"render\": display visual widget cards in the user's field of view — provide \"widgets\".\n" +
+                    "• action=\"delegate\": perform a real-world action (sending messages, searching, lists, reminders, notes, scheduling, smart-home control, app interactions, research, etc.) — provide a detailed \"task\". This is the only way anything real happens.",
+            )
             put("parameters", JSONObject().apply {
                 put("type", "object")
                 put("properties", JSONObject().apply {
+                    put("action", JSONObject().apply {
+                        put("type", "string")
+                        put("enum", JSONArray().put("delegate").put("render"))
+                        put(
+                            "description",
+                            "delegate = perform a real-world action via the assistant (OpenClaw); render = show widget cards in the field of view.",
+                        )
+                    })
                     put("task", JSONObject().apply {
                         put("type", "string")
-                        put("description", "Clear, detailed description of what to do. Include all relevant context: names, content, platforms, quantities, etc.")
+                        put(
+                            "description",
+                            "For action=delegate: a clear, detailed description of what to do, with all relevant context (names, content, platforms, quantities, etc.).",
+                        )
+                    })
+                    put("widgets", JSONObject().apply {
+                        put("type", "array")
+                        put(
+                            "description",
+                            "For action=render: the widget cards to show, top to bottom. Each render replaces whatever is currently shown.",
+                        )
+                        put("items", widgetItemSchema())
                     })
                 })
-                put("required", JSONArray().put("task"))
+                put("required", JSONArray().put("action"))
             })
             put("behavior", "BLOCKING")
+        }
+    }
+
+    private fun widgetItemSchema(): JSONObject {
+        return JSONObject().apply {
+            put("type", "object")
+            put("properties", JSONObject().apply {
+                put("type", JSONObject().apply {
+                    put("type", "string")
+                    put("enum", JSONArray().put("text").put("image").put("table"))
+                    put("description", "The widget type.")
+                })
+                put("title", JSONObject().apply {
+                    put("type", "string")
+                    put("description", "Optional heading shown at the top of the widget.")
+                })
+                put("body", JSONObject().apply {
+                    put("type", "string")
+                    put("description", "For type=text: the paragraph of text to show.")
+                })
+                put("imageKind", JSONObject().apply {
+                    put("type", "string")
+                    put("enum", JSONArray().put("map").put("gallery").put("calendar"))
+                    put(
+                        "description",
+                        "For type=image: which fixed image to show — map, gallery, or calendar.",
+                    )
+                })
+                put("caption", JSONObject().apply {
+                    put("type", "string")
+                    put("description", "For type=image: a short caption under the image.")
+                })
+                put("columns", JSONObject().apply {
+                    put("type", "array")
+                    put("items", JSONObject().put("type", "string"))
+                    put("description", "For type=table: optional column header labels.")
+                })
+                put("rows", JSONObject().apply {
+                    put("type", "array")
+                    put(
+                        "description",
+                        "For type=table: the rows; each row is an array of cell strings.",
+                    )
+                    put(
+                        "items",
+                        JSONObject().apply {
+                            put("type", "array")
+                            put("items", JSONObject().put("type", "string"))
+                        },
+                    )
+                })
+            })
+            put("required", JSONArray().put("type"))
         }
     }
 }
