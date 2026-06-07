@@ -44,6 +44,7 @@
 		D15D1A40000000000000000B /* NativeWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = D15D1A40000000000000000A /* NativeWidgets.swift */; };
 		D15D1A40000000000000000D /* WidgetSpec.swift in Sources */ = {isa = PBXBuildFile; fileRef = D15D1A40000000000000000C /* WidgetSpec.swift */; };
 		D15D1A40000000000000000F /* WidgetBoardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D15D1A40000000000000000E /* WidgetBoardView.swift */; };
+		D15D1A400000000000000011 /* MusicPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = D15D1A400000000000000010 /* MusicPlayer.swift */; };
 		9DD894B22F4047630090B9B9 /* SettingsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DD894AF2F4047630090B9B9 /* SettingsManager.swift */; };
 		9DD894B32F4047630090B9B9 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DD894B02F4047630090B9B9 /* SettingsView.swift */; };
 		9DD895962F405E0E0090B9B9 /* RTCVideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DD895952F405E0E0090B9B9 /* RTCVideoView.swift */; };
@@ -121,6 +122,7 @@
 		D15D1A40000000000000000A /* NativeWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeWidgets.swift; sourceTree = "<group>"; };
 		D15D1A40000000000000000C /* WidgetSpec.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetSpec.swift; sourceTree = "<group>"; };
 		D15D1A40000000000000000E /* WidgetBoardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetBoardView.swift; sourceTree = "<group>"; };
+		D15D1A400000000000000010 /* MusicPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicPlayer.swift; sourceTree = "<group>"; };
 		9DD894AF2F4047630090B9B9 /* SettingsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsManager.swift; sourceTree = "<group>"; };
 		9DD894B02F4047630090B9B9 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		9DD895942F405E0E0090B9B9 /* PiPVideoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PiPVideoView.swift; sourceTree = "<group>"; };
@@ -314,6 +316,7 @@
 				D15D1A40000000000000000A /* NativeWidgets.swift */,
 				D15D1A40000000000000000C /* WidgetSpec.swift */,
 				D15D1A40000000000000000E /* WidgetBoardView.swift */,
+				D15D1A400000000000000010 /* MusicPlayer.swift */,
 			);
 			path = Display;
 			sourceTree = "<group>";
@@ -452,6 +455,7 @@
 				D15D1A40000000000000000B /* NativeWidgets.swift in Sources */,
 				D15D1A40000000000000000D /* WidgetSpec.swift in Sources */,
 				D15D1A40000000000000000F /* WidgetBoardView.swift in Sources */,
+				D15D1A400000000000000011 /* MusicPlayer.swift in Sources */,
 				8FD96B882E6F0A9800F56AB1 /* StreamSessionView.swift in Sources */,
 				8FFD60602E84A2F70035E446 /* MainAppView.swift in Sources */,
 				9DD6CB052F3C637D00ED7098 /* WebRTCSessionViewModel.swift in Sources */,

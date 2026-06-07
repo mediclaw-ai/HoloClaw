@@ -109,6 +109,23 @@ enum DisplayWidgets {
         }
       }
       .background(.card)
+
+    case let .music(url, title):
+      return FlexBox(
+        direction: .column, spacing: 10, alignment: .start, crossAlignment: .stretch,
+        padding: EdgeInsets(all: 18)
+      ) {
+        Text(title ?? "Track", style: .heading)
+        FlexBox(direction: .row, spacing: 8, alignment: .start, crossAlignment: .center) {
+          Button(label: "Play", style: .primary, iconName: .triangleRight, onClick: {
+            Task { @MainActor in MusicPlayer.shared.play(url: url) }
+          })
+          Button(label: "Pause", style: .secondary, onClick: {
+            Task { @MainActor in MusicPlayer.shared.pause() }
+          })
+        }
+      }
+      .background(.card)
     }
   }
 

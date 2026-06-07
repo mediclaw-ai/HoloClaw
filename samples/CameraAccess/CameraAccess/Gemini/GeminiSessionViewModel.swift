@@ -249,12 +249,16 @@ class GeminiSessionViewModel: ObservableObject {
     if isImage {
       widget = WidgetSpec(kind: .image(url: url, caption: "Generated image"))
     } else if isMusic {
-      widget = WidgetSpec(kind: .text(title: "Your vibe track 🎵", body: url))
+      widget = WidgetSpec(kind: .music(url: url, title: "Your vibe track 🎵"))
     } else {
       return
     }
     widgets = [widget]
     onWidgetsRendered?([widget])
+    if isMusic {
+      // Start playback right away — audio routes to the glasses over Bluetooth.
+      MusicPlayer.shared.play(url: url)
+    }
     NSLog("[Widgets] auto-rendered %@ link: %@", isImage ? "image" : "music", url)
   }
 

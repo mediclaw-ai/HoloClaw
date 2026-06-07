@@ -51,6 +51,8 @@ struct WidgetSpec: Identifiable, Sendable {
     // an arbitrary public URL for app-generated images (e.g. from OpenClaw).
     case image(url: String, caption: String?)
     case table(title: String?, columns: [String]?, rows: [[String]])
+    // A playable audio track (e.g. a generated Eleven Labs URL).
+    case music(url: String, title: String?)
   }
 
   let id = UUID()

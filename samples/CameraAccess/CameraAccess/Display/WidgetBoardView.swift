@@ -42,6 +42,8 @@ private struct WidgetCard: View {
       )
     case let .table(title, columns, rows):
       DynamicTableWidget(title: title, columns: columns, rows: rows)
+    case let .music(url, title):
+      MusicPlayerWidget(url: url, title: title ?? "Track")
     }
   }
 }

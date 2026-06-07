@@ -259,6 +259,7 @@ private func sfSymbol(for name: MWDATDisplay.IconName) -> String {
   case .checkmark, .checkmarkCircle: return "checkmark"
   case .arrowLeft: return "arrow.left"
   case .arrowRight: return "arrow.right"
+  case .triangleRight, .triangleRightCircle: return "play.fill"
   case .gear: return "gearshape"
   case .bell: return "bell"
   case .heart: return "heart"
