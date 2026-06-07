@@ -4,13 +4,13 @@
 
 # HoloClaw
 
-A real-time AI assistant for Meta Ray-Ban smart glasses. See what you see, hear what you say, and take actions on your behalf — all through voice.
+A real-time AI assistant for Meta Ray-Ban smart glasses. See what you see, hear what you say, generate images and holographic widgets in your field of view, and take actions on your behalf — all through voice.
 
 Built on the [Meta Wearables DAT SDK](https://wearables.developer.meta.com/) (iOS & Android) + [Gemini Live API](https://ai.google.dev/gemini-api/docs/live) + [OpenClaw](https://github.com/openclaw/openclaw) (optional).
 
 **Supported platforms:** iOS (iPhone) and Android (Pixel, Samsung, etc.)
 
-> This repository extends the open-source [Intent-Lab/HoloClaw](https://github.com/Intent-Lab/HoloClaw) sample apps with display widgets, glasses-side rendering, and Android/iOS parity updates.
+> This repository extends the open-source [Intent-Lab/HoloClaw](https://github.com/Intent-Lab/HoloClaw) sample apps with on-demand widgets and image generation, glasses-side rendering, and Android/iOS parity updates.
 
 ---
 
@@ -22,7 +22,8 @@ HoloClaw turns Meta Ray-Ban smart glasses (or your phone camera) into a always-o
 |------------|-------------|
 | **Voice + vision** | Gemini Live sees through the camera (~1 fps) and talks back in real time |
 | **Agentic actions** | Optional OpenClaw gateway lets Gemini send messages, search the web, manage lists, and more |
-| **Live widgets** | Gemini can render text, tables, and image cards in your field of view (phone + Ray-Ban Display glasses) |
+| **Widgets + images** | Ask for text notes, tables, maps, galleries, or calendars as live widget cards — or generate new images from what you see and say, shown on your phone and Ray-Ban Display lenses |
+| **Audio generation** | OpenClaw + ElevenLabs can create music and podcasts from the same context, played through the glasses speakers |
 | **Phone mode** | Test the full pipeline without glasses using your phone camera |
 
 ### What we built
@@ -31,7 +32,7 @@ HoloClaw turns Meta Ray-Ban smart glasses (or your phone camera) into a always-o
   <img src="assets/product.png" alt="What we have built" width="720">
 </p>
 
-**HoloClaw** is an agent that creates on-demand holographic widgets in your field of view to answer questions in context. It connects to **OpenClaw** for real-world actions, and is built on the Meta Ray-Ban **Device Access Toolkit** — using both **camera** (what you see) and **display** (what is shown on the lenses). The sample apps in this repo are the first public agentic client for Ray-Ban Display glasses on GitHub.
+**HoloClaw** is an agent that answers in context by putting information in your field of view — **holographic widgets** (text, tables, maps, photos, calendars) and **generated images** created on demand from what you see and ask. It connects to **OpenClaw** for real-world actions and media generation, and is built on the Meta Ray-Ban **Device Access Toolkit** — using both **camera** (what you see) and **display** (what is shown on the lenses). The sample apps in this repo are the first public agentic client for Ray-Ban Display glasses on GitHub.
 
 ### Communication workflow
 
@@ -41,11 +42,21 @@ HoloClaw turns Meta Ray-Ban smart glasses (or your phone camera) into a always-o
 
 At a high level, the loop is simple and bidirectional:
 
-1. **Glasses (or phone)** — capture what you see and hear; show widgets and responses in the display.
-2. **HoloClaw app** — streams audio and video to the AI, renders widgets on the phone and on the glasses display, and routes tool calls.
-3. **OpenClaw** — optional backend that executes agentic tasks (messages, search, lists, and more) and returns results to be spoken or shown.
+1. **Glasses (or phone)** — capture what you see and hear; show widgets, generated images, and responses in the display.
+2. **HoloClaw app** — streams audio and video to the AI, renders widget cards and images on the phone and on the glasses display, and routes tool calls.
+3. **OpenClaw** — optional backend that executes agentic tasks (messages, search, lists, image generation, and more) and returns results to be spoken or shown.
 
-Data flows out from the wearable through the app to OpenClaw; answers and widgets flow back to the user through voice and the in-lens display.
+Data flows out from the wearable through the app to OpenClaw; answers, widgets, and generated visuals flow back through voice and the in-lens display.
+
+### ElevenLabs
+
+<p align="center">
+  <img src="assets/elevenlabs.jpeg" alt="HoloClaw and ElevenLabs" width="720">
+</p>
+
+HoloClaw does not only **show** structured widget cards — it can **generate** new content from your context. Through **OpenClaw**, the assistant can create **images** from the camera feed, your voice, and tool results (web search, computer use, MCP databases, and more), then push them to the Ray-Ban display alongside widgets.
+
+For audio, **[ElevenLabs](https://elevenlabs.io/)** adds **music** and **podcast** generation on the same inputs. Visuals land on the lenses; audio plays through the glasses speakers — so an answer can be a widget, a generated image, spoken text, or all of the above.
 
 ### Where we want to go
 
@@ -53,7 +64,7 @@ Data flows out from the wearable through the app to OpenClaw; answers and widget
   <img src="assets/extended_workflow.png" alt="HoloClaw roadmap" width="720">
 </p>
 
-**Vision hardware** — today we target Meta Ray-Ban (camera + display). We want to extend the same agentic, widget-based experience to more XR devices: slim AR glasses, mixed-reality headsets, and other always-on wearables that can see and show information in context.
+**Vision hardware** — today we target Meta Ray-Ban (camera + display). We want to extend the same agentic experience — widgets, generated images, and audio — to more XR devices: slim AR glasses, mixed-reality headsets, and other always-on wearables that can see and show information in context.
 
 **Agent orchestration** — the current stack uses **Gemini Live** on the phone plus **OpenClaw** for actions. Longer term we plan a dedicated **Holo Agent** layer and tighter integration with orchestration tools such as **Claude**, **Codex**, **Cursor**, and **Hermes-Agent**, so the right model or agent can handle each task while the glasses stay the consistent interface.
 
@@ -149,7 +160,7 @@ Then in HoloClaw:
 1. Tap **Connect my glasses** and complete registration in the Meta AI app if needed.
 2. Tap **Start streaming**.
 3. Tap **AI** for voice + vision.
-4. (Display glasses) Try **Hello World on Display** on the pre-stream screen, or ask Gemini to show widgets while streaming.
+4. (Display glasses) Try **Hello World on Display** on the pre-stream screen, or ask Gemini to show widgets and generate images while streaming.
 
 ---
 
@@ -240,7 +251,7 @@ Enable **Developer Mode** in the Meta AI app (same steps as [iOS above](#with-me
 1. Tap **Connect my glasses** and finish registration.
 2. Tap **Start streaming**.
 3. Tap **AI** for voice + vision.
-4. (Display glasses) Use **Hello World on Display** or ask Gemini to render widgets while streaming.
+4. (Display glasses) Use **Hello World on Display** or ask Gemini to render widgets and generate images while streaming.
 
 > **Debug without hardware:** In debug builds, open the **bug icon** (Mock Device Kit) to pair a simulated Ray-Ban device.
 
@@ -248,7 +259,7 @@ Enable **Developer Mode** in the Meta AI app (same steps as [iOS above](#with-me
 
 ## Setup: OpenClaw (optional)
 
-OpenClaw gives Gemini the ability to take real-world actions. Without it, the app is voice + vision only (widgets still work via `action="render"`).
+OpenClaw gives Gemini the ability to take real-world actions and generate images, music, and podcasts. Without it, the app is voice + vision with on-device widget rendering (`action="render"` for text, tables, and image cards).
 
 ### 1. Install and configure OpenClaw
 
