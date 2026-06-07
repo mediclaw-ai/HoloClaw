@@ -77,8 +77,11 @@ fun StreamScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
     val context = LocalContext.current
 
-    LaunchedEffect(geminiViewModel) {
+    LaunchedEffect(geminiViewModel, streamViewModel) {
         streamViewModel.geminiViewModel = geminiViewModel
+        geminiViewModel.onWidgetsRendered = { specs ->
+            streamViewModel.sendWidgetsToGlasses(specs)
+        }
     }
 
     LaunchedEffect(webrtcViewModel) {
@@ -97,6 +100,7 @@ fun StreamScreen(
 
     DisposableEffect(Unit) {
         onDispose {
+            geminiViewModel.onWidgetsRendered = null
             if (geminiUiState.isGeminiActive) geminiViewModel.stopSession()
             if (webrtcUiState.isActive) webrtcViewModel.stopSession()
         }

@@ -39,6 +39,10 @@ class GeminiSessionViewModel : ViewModel() {
         private const val TAG = "GeminiSessionVM"
     }
 
+    /// Notifies the host when Gemini renders widgets so they can also be pushed to the
+    /// glasses Display (SDK) during streaming.
+    var onWidgetsRendered: ((List<WidgetSpec>) -> Unit)? = null
+
     private val _uiState = MutableStateFlow(GeminiUiState())
     val uiState: StateFlow<GeminiUiState> = _uiState.asStateFlow()
 
@@ -227,6 +231,7 @@ class GeminiSessionViewModel : ViewModel() {
         val specs = WidgetSpec.listFrom(call.args)
         Log.d(TAG, "render_widgets -> ${specs.size} widget(s)")
         _uiState.value = _uiState.value.copy(widgets = specs)
+        onWidgetsRendered?.invoke(specs)
         val response =
             org.json.JSONObject().apply {
                 put(
