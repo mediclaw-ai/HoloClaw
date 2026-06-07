@@ -15,11 +15,19 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PauseCircle
+import androidx.compose.material.icons.filled.PlayCircle
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -44,11 +52,13 @@ private fun WidgetCard(widget: WidgetSpec) {
         is WidgetSpec.Kind.Text -> TextWidgetCard(title = kind.title, bodyText = kind.body)
         is WidgetSpec.Kind.Image ->
             ImageWidgetCard(
-                imageUrl = kind.imageKind.url,
-                caption = kind.caption?.takeIf { it.isNotEmpty() } ?: kind.imageKind.defaultCaption,
+                imageUrl = kind.url,
+                caption = kind.caption?.takeIf { it.isNotEmpty() } ?: "Image",
             )
         is WidgetSpec.Kind.Table ->
             TableWidgetCard(title = kind.title, columns = kind.columns, rows = kind.rows)
+        is WidgetSpec.Kind.Music ->
+            MusicPlayerWidget(url = kind.url, title = kind.title ?: "Track")
     }
 }
 
@@ -93,6 +103,40 @@ private fun ImageWidgetCard(imageUrl: String, caption: String) {
             color = Color.White.copy(alpha = 0.6f),
             modifier = Modifier.padding(top = 8.dp),
         )
+    }
+}
+
+@Composable
+private fun MusicPlayerWidget(url: String, title: String) {
+    val isPlaying by MusicPlayer.isPlaying.collectAsStateWithLifecycle()
+    val currentUrl by MusicPlayer.currentUrl.collectAsStateWithLifecycle()
+    val playingThis = isPlaying && currentUrl == url
+
+    Row(
+        modifier = Modifier.fillMaxWidth().displayCardStyle().padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IconButton(onClick = { MusicPlayer.toggle(url) }) {
+            Icon(
+                imageVector = if (playingThis) Icons.Filled.PauseCircle else Icons.Filled.PlayCircle,
+                contentDescription = if (playingThis) "Pause" else "Play",
+                tint = Color.White,
+                modifier = Modifier.height(44.dp).width(44.dp),
+            )
+        }
+        Column(modifier = Modifier.padding(start = 4.dp)) {
+            Text(
+                text = title,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Color.White,
+            )
+            Text(
+                text = if (playingThis) "Playing on your glasses…" else "Tap to play",
+                fontSize = 12.sp,
+                color = Color.White.copy(alpha = 0.6f),
+            )
+        }
     }
 }
 

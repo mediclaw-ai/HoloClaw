@@ -3,6 +3,8 @@ package com.meta.wearable.dat.externalsampleapps.cameraaccess.gemini
 import android.content.Context
 import android.graphics.Bitmap
 import android.util.Log
+import android.util.Patterns
+import com.meta.wearable.dat.externalsampleapps.cameraaccess.display.MusicPlayer
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.meta.wearable.dat.externalsampleapps.cameraaccess.display.WidgetSpec
@@ -67,6 +69,7 @@ class GeminiSessionViewModel : ViewModel() {
         }
 
         _uiState.value = _uiState.value.copy(isGeminiActive = true)
+        MusicPlayer.init(context)
 
         // Wire audio callbacks
         audioManager.onAudioCaptured = lambda@{ data ->
@@ -131,8 +134,10 @@ class GeminiSessionViewModel : ViewModel() {
                     if (action == "render" || hasWidgets) {
                         handleRenderWidgets(call)
                     } else {
+                        val task = call.args["task"]?.toString()
                         toolCallRouter?.handleToolCall(call) { response ->
                             geminiService.sendToolResponse(response)
+                            maybeRenderResultLink(task, response)
                         }
                     }
                 }
@@ -203,6 +208,7 @@ class GeminiSessionViewModel : ViewModel() {
     }
 
     fun stopSession() {
+        MusicPlayer.stop()
         eventClient.disconnect()
         toolCallRouter?.cancelAll()
         toolCallRouter = null
@@ -259,6 +265,64 @@ class GeminiSessionViewModel : ViewModel() {
                 )
             }
         geminiService.sendToolResponse(response)
+    }
+
+    /**
+     * If a delegated music/podcast or image task returns a public URL (e.g. from Eleven Labs
+     * via OpenClaw), show it as a widget on the phone and glasses and auto-play audio.
+     */
+    private fun maybeRenderResultLink(task: String?, response: org.json.JSONObject) {
+        val result = resultString(response) ?: return
+        val url = firstUrl(result) ?: return
+        val taskLower = (task ?: "").lowercase()
+        val urlLower = url.lowercase()
+
+        val isImage =
+            taskLower.contains("image") ||
+                taskLower.contains("picture") ||
+                taskLower.contains("photo") ||
+                listOf("png", "jpg", "jpeg", "webp", "gif", "heic").any { urlLower.contains(".$it") }
+        val isAudio =
+            taskLower.contains("eleven") ||
+                taskLower.contains("music") ||
+                taskLower.contains("vibe") ||
+                taskLower.contains("podcast") ||
+                listOf("mp3", "wav", "m4a", "aac", "ogg", "flac").any { urlLower.contains(".$it") }
+
+        val widget =
+            when {
+                isImage ->
+                    WidgetSpec(
+                        kind = WidgetSpec.Kind.Image(url = url, caption = "Generated image"),
+                    )
+                isAudio -> {
+                    val title =
+                        if (taskLower.contains("podcast")) "Your podcast 🎙️"
+                        else "Your vibe track 🎵"
+                    WidgetSpec(kind = WidgetSpec.Kind.Music(url = url, title = title))
+                }
+                else -> return
+            }
+
+        Log.d(TAG, "auto-rendered ${if (isImage) "image" else "audio"} link: $url")
+        _uiState.value = _uiState.value.copy(widgets = listOf(widget))
+        onWidgetsRendered?.invoke(listOf(widget))
+        if (isAudio) {
+            MusicPlayer.play(url)
+        }
+    }
+
+    private fun resultString(response: org.json.JSONObject): String? {
+        val toolResponse = response.optJSONObject("toolResponse") ?: return null
+        val functionResponses = toolResponse.optJSONArray("functionResponses") ?: return null
+        val resp = functionResponses.optJSONObject(0)?.optJSONObject("response") ?: return null
+        return resp.optString("result").takeIf { it.isNotEmpty() }
+            ?: resp.optString("error").takeIf { it.isNotEmpty() }
+    }
+
+    private fun firstUrl(text: String): String? {
+        val matcher = Patterns.WEB_URL.matcher(text)
+        return if (matcher.find()) matcher.group() else null
     }
 
     override fun onCleared() {

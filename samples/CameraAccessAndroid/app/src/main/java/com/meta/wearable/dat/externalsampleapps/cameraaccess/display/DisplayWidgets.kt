@@ -69,13 +69,22 @@ object DisplayWidgets {
                     background = FlexBoxBackground.CARD,
                 ) {
                     image(
-                        uri = kind.imageKind.url,
+                        uri = kind.url,
                         sizePreset = ImageSize.FILL,
                         cornerRadius = CornerRadius.MEDIUM,
                     )
-                    val caption =
-                        kind.caption?.takeIf { it.isNotEmpty() } ?: kind.imageKind.defaultCaption
+                    val caption = kind.caption?.takeIf { it.isNotEmpty() } ?: "Image"
                     text(caption, style = TextStyle.BODY, color = TextColor.SECONDARY)
+                }
+            is WidgetSpec.Kind.Music ->
+                flexBox(
+                    direction = Direction.COLUMN,
+                    gap = 8,
+                    padding = 18,
+                    background = FlexBoxBackground.CARD,
+                ) {
+                    text(kind.title ?: "Track", style = TextStyle.HEADING)
+                    text("Playing on your glasses…", style = TextStyle.BODY, color = TextColor.SECONDARY)
                 }
             is WidgetSpec.Kind.Table ->
                 flexBox(

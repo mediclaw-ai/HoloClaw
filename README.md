@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo.png" alt="HoloClaw logo" width="280">
+  <img src="assets/elevenlabs.png" alt="HoloClaw logo" width="280">
 </p>
 
 # HoloClaw
@@ -49,10 +49,6 @@ At a high level, the loop is simple and bidirectional:
 Data flows out from the wearable through the app to OpenClaw; answers, widgets, and generated visuals flow back through voice and the in-lens display.
 
 ### ElevenLabs
-
-<p align="center">
-  <img src="assets/elevenlabs.jpeg" alt="HoloClaw and ElevenLabs" width="720">
-</p>
 
 HoloClaw does not only **show** structured widget cards — it can **generate** new content from your context. Through **OpenClaw**, the assistant can create **images** from the camera feed, your voice, and tool results (web search, computer use, MCP databases, and more), then push them to the Ray-Ban display alongside widgets.
 

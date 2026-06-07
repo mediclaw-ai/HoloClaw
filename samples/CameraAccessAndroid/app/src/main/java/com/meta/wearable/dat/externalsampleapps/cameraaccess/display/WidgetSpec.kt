@@ -40,10 +40,13 @@ data class WidgetSpec(
     sealed class Kind {
         data class Text(val title: String?, val body: String) : Kind()
 
-        data class Image(val imageKind: WidgetImageKind, val caption: String?) : Kind()
+        data class Image(val url: String, val caption: String?) : Kind()
 
         data class Table(val title: String?, val columns: List<String>?, val rows: List<List<String>>) :
             Kind()
+
+        /** A playable audio track (e.g. Eleven Labs music or podcast URL from OpenClaw). */
+        data class Music(val url: String, val title: String?) : Kind()
     }
 
     companion object {
@@ -76,7 +79,13 @@ data class WidgetSpec(
                         dict.optString("imageKind", dict.optString("kind", "map")).lowercase()
                     val imageKind = WidgetImageKind.from(kindString)
                     val caption = dict.optString("caption").takeIf { it.isNotEmpty() }
-                    WidgetSpec(kind = Kind.Image(imageKind = imageKind, caption = caption))
+                    WidgetSpec(
+                        kind =
+                            Kind.Image(
+                                url = imageKind.url,
+                                caption = caption ?: imageKind.defaultCaption,
+                            ),
+                    )
                 }
                 "table" -> {
                     val columns = dict.optJSONArray("columns")?.toStringList()
